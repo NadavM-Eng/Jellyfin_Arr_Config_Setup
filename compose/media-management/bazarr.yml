@@ -1,0 +1,26 @@
+services:
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+
+    environment:
+      - PUID=${PUID:-1000} # gets the PUID from .env file. Otherwise default to 1000.
+      - PGID=${PGID:-1000} # gets the PGID from .env file. Otherwise default to 1000.
+      - TZ=${TZ:-Asia/Jerusalem}
+
+    volumes:
+      - type: bind
+        source: ${CONFIG_ROOT}/bazarr
+        target: /config
+
+      - type: bind
+        source: ${DATA_ROOT}/media
+        target: /data/media
+
+    ports:
+      - "${BAZARR_PORT:-6767}:6767"
+
+    restart: unless-stopped
+
+    networks:
+      - media_network

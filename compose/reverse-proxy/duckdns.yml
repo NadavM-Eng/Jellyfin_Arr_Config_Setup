@@ -1,0 +1,16 @@
+services:
+  duckdns:
+    image: lscr.io/linuxserver/duckdns:latest
+    container_name: duckdns
+
+    environment:
+      - PUID=${PUID:-1000} # gets the PUID from .env file. Otherwise default to 1000.
+      - PGID=${PGID:-1000} # gets the PGID from .env file. Otherwise default to 1000.
+      - TZ=${TZ:-Asia/Jerusalem}
+      - SUBDOMAINS=${DUCKDNS_SUBDOMAINS} # e.g., media-server, go to the account on https://www.duckdns.org/ # if you don't have account, create one. 
+      - TOKEN=${DUCKDNS_TOKEN} # ALSO from duckdns.org. 
+
+    restart: unless-stopped
+
+    networks:
+      - media_network

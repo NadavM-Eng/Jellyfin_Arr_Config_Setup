@@ -1,0 +1,27 @@
+# MasterBuilder Quick Setup
+#
+# Add one Compose file per line.
+# Blank lines and lines beginning with # are ignored.
+# Both setup.sh and setup.ps1 read this same file.
+
+compose/base.yml
+
+# Reverse Proxy
+compose/reverse-proxy/npm.yml
+compose/reverse-proxy/duckdns.yml
+
+# Media Management Stack
+compose/media-management/jellyfin.yml
+compose/media-management/sonarr.yml
+compose/media-management/radarr.yml
+compose/media-management/bazarr.yml
+compose/media-management/prowlarr.yml
+
+# Bypass
+compose/bypass/trawl.yml
+
+# Downloads
+compose/downloads/qbittorrent.yml
+
+# Request System
+compose/request-system/seerr.yml

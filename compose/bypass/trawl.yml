@@ -1,0 +1,58 @@
+services:
+    trawl-redis:
+        image: redis:8.8-alpine
+        container_name: trawl-redis
+
+        volumes:
+          - trawl_redis_data:/data
+
+        restart: unless-stopped
+
+        networks:
+          - media_network
+          
+    trawl:
+        image: ghcr.io/germondai/trawl:latest
+        container_name: trawl
+
+        shm_size: 1gb
+
+        environment:
+          - REDIS_URL=redis://trawl-redis:6379
+
+          - BROWSER_POOL_SIZE=${TRAWL_BROWSER_POOL_SIZE:-1}
+
+          - PROXY_URL=${TRAWL_PROXY_URL:-}
+          - RESIDENTIAL_PROXY_URL=${TRAWL_RESIDENTIAL_PROXY_URL:-}
+
+          - MITM_PROXY_ENABLED=${TRAWL_MITM_ENABLED:-false}
+          - MITM_PROXY_HOST=0.0.0.0
+          - MITM_PROXY_PORT=8192
+          - MITM_PROXY_CA_DIR=/data/proxy-ca
+          - MITM_PROXY_MAX_TIER=${TRAWL_MITM_MAX_TIER:-4}
+          - MITM_PROXY_DEBUG=${TRAWL_MITM_DEBUG:-false}
+
+        volumes:
+          - type: bind
+            source: ${CONFIG_ROOT}/trawl/proxy-ca
+            target: /data/proxy-ca
+
+        depends_on:
+          - trawl-redis
+
+        healthcheck:
+          test: ["CMD", "curl", "-sf", "http://localhost:8191/health"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 90s
+
+        restart: unless-stopped
+
+        networks:
+          - media_network
+          
+volumes:
+  trawl_redis_data:
+      
+  

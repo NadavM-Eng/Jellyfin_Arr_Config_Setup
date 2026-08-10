@@ -1,0 +1,22 @@
+services:
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+
+    environment:
+      - PUID=${PUID:-1000} # gets the PUID from .env file. Otherwise default to 1000.
+      - PGID=${PGID:-1000} # gets the PGID from .env file. Otherwise default to 1000.
+      - TZ=${TZ:-Asia/Jerusalem}
+
+    volumes:
+      - type: bind
+        source: ${CONFIG_ROOT}/prowlarr
+        target: /config
+
+    ports:
+      - "${PROWLARR_PORT:-9696}:9696"
+
+    restart: unless-stopped
+
+    networks:
+      - media_network

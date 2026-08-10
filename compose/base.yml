@@ -1,0 +1,4 @@
+networks:
+  media_network:
+    name: media_network
+    driver: bridge

@@ -1,0 +1,26 @@
+services:
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+
+    environment:
+      - PUID=${PUID:-1000} # gets the PUID from .env file. Otherwise default to 1000.
+      - PGID=${PGID:-1000} # gets the PGID from .env file. Otherwise default to 1000.
+      - TZ=${TZ:-Asia/Jerusalem}
+
+    volumes:
+      - type: bind
+        source: ${CONFIG_ROOT}/sonarr
+        target: /config
+
+      - type: bind
+        source: ${DATA_ROOT}
+        target: /data
+
+    ports:
+      - "${SONARR_PORT:-8989}:8989"
+
+    restart: unless-stopped
+
+    networks:
+      - media_network

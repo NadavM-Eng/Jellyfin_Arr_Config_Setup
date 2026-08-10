@@ -1,0 +1,29 @@
+
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+
+    environment:
+      - TZ=${TZ:-Asia/Jerusalem}
+
+    ports:
+      - "${NPM_HTTP_PORT:-80}:80" # Public HTTP Port
+      - "${NPM_HTTPS_PORT:-4443}:443" # Public HTTPS Port
+      - "${NPM_ADMIN_PORT:-81}:81" # Admin Web UI - Go to here to initialize.
+
+    volumes:
+      - type: bind
+        source: ${CONFIG_ROOT}/npm/data
+        target: /data
+
+      - type: bind
+        source: ${CONFIG_ROOT}/npm/letsencrypt
+        target: /etc/letsencrypt
+
+    restart: unless-stopped
+
+    networks:
+      - media_network
+  
+  

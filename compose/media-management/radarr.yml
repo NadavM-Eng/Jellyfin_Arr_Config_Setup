@@ -1,0 +1,26 @@
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+
+    environment:
+      - PUID=${PUID:-1000} # gets the PUID from .env file. Otherwise default to 1000.
+      - PGID=${PGID:-1000} # gets the PGID from .env file. Otherwise default to 1000.
+      - TZ=${TZ:-Asia/Jerusalem}
+
+    volumes:
+      - type: bind
+        source: ${CONFIG_ROOT}/radarr
+        target: /config
+
+      - type: bind
+        source: ${DATA_ROOT}
+        target: /data
+
+    ports:
+      - "${RADARR_PORT:-7878}:7878"
+
+    restart: unless-stopped
+
+    networks:
+      - media_network
