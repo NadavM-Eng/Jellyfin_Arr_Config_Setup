@@ -339,6 +339,64 @@ add_public_indexer() {
     fi
 }
 
+# ------------------------------------------------------------------------------
+# Add one credentialed indexer
+# ------------------------------------------------------------------------------
+
+add_private_indexer() {
+    local name="$1"
+    local definition="$2"
+    local credential_field="$3"
+    local credential_env="$4"
+    local credential_value="$5"
+    local app_profile_id="$6"
+
+    local payload
+
+    if [[ -z "$credential_value" ]]; then
+        warn "$name was not configured."
+        warn "Missing value: $credential_env"
+        warn "Edit $ENV_FILE and add:"
+        warn "    $credential_env=<your credential>"
+        warn "Then run the setup again."
+        printf '\n'
+        return
+    fi
+
+    if indexer_exists "$definition"; then
+        info "$name already exists. Skipping."
+        return
+    fi
+
+    info "Adding $name..."
+
+    payload="$(
+        build_indexer_payload \
+            "$definition" \
+            "$app_profile_id" |
+        jq -c \
+            --arg credential_field "$credential_field" \
+            --arg credential_value "$credential_value" '
+                .fields |= map(
+                    if .name == $credential_field
+                    then .value = $credential_value
+                    else .
+                    end
+                )
+            '
+    )"
+
+    if prowlarr_write \
+        POST \
+        '/api/v1/indexer' \
+        "$payload" \
+        "$name"
+    then
+        info "$name added."
+    else
+        warn "$name was skipped. The rest of the bootstrap will continue."
+    fi
+}
 
 # ------------------------------------------------------------------------------
 # Configure selected public indexers
@@ -395,4 +453,54 @@ configure_public_indexers() {
 
     printf '\n'
     info "Public indexer bootstrap finished."
+}
+# ------------------------------------------------------------------------------
+# Configure selected private indexers
+# ------------------------------------------------------------------------------
+
+configure_private_indexers() {
+    local app_profile_id
+
+    printf '\n'
+    printf '============================================================\n'
+    printf 'PROWLARR PRIVATE INDEXERS\n'
+    printf '============================================================\n'
+
+    require_indexer_tools
+
+    app_profile_id="$(get_app_profile_id)"
+
+
+    # Anime Tosho
+    add_private_indexer \
+        'Anime Tosho' \
+        'animetosho-xyz' \
+        'apikey' \
+        'ANIMETOSHO_API_KEY' \
+        "${ANIMETOSHO_API_KEY:-}" \
+        "$app_profile_id"
+
+
+    # Fuzer
+    add_private_indexer \
+        'Fuzer' \
+        'fuzer' \
+        'cookie' \
+        'FUZER_COOKIE' \
+        "${FUZER_COOKIE:-}" \
+        "$app_profile_id"
+
+
+    # Hebits
+    add_private_indexer \
+        'Hebits' \
+        'hebits' \
+        'cookie' \
+        'HEBITS_COOKIE' \
+        "${HEBITS_COOKIE:-}" \
+        "$app_profile_id"
+
+
+    printf '\n'
+    info "Private indexer bootstrap finished."
 }

@@ -52,7 +52,7 @@ wait_for_config() {
     local file="$2"
     local waited=0
 
-    info "Waiting for $name configuration..." >&2
+    info "Waiting for $name configuration..." >&2       
 
     until [[ -s "$file" ]]; do
         if (( waited >= 120 )); then
@@ -438,6 +438,7 @@ INDEXER_BOOTSTRAP="$PROJECT_ROOT/bootstrap/prowlarr/indexers.sh"
 source "$INDEXER_BOOTSTRAP"
 
 configure_public_indexers
+configure_private_indexers
 
 printf '\n'
 printf '============================================================\n'
