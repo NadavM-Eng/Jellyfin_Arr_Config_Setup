@@ -52,7 +52,7 @@ wait_for_config() {
     local file="$2"
     local waited=0
 
-    info "Waiting for $name configuration..." >
+    info "Waiting for $name configuration..." >&2
 
     until [[ -s "$file" ]]; do
         if (( waited >= 120 )); then
@@ -427,6 +427,17 @@ printf '============================================================\n'
 configure_sonarr
 configure_radarr
 configure_trawl
+
+# INDEXERS creator
+INDEXER_BOOTSTRAP="$PROJECT_ROOT/bootstrap/prowlarr/indexers.sh"
+
+[[ -f "$INDEXER_BOOTSTRAP" ]] ||
+    fatal "Missing Prowlarr indexer bootstrap: $INDEXER_BOOTSTRAP"
+
+# shellcheck disable=SC1090
+source "$INDEXER_BOOTSTRAP"
+
+configure_public_indexers
 
 printf '\n'
 printf '============================================================\n'
