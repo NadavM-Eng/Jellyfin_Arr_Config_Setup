@@ -308,6 +308,60 @@ validate_quick_stack() {
   info "Compose configuration is valid."
 }
 
+show_service_links() {
+  heading "SERVICE LINKS"
+
+  local host_ip
+
+  local sonarr_port
+  local radarr_port
+  local prowlarr_port
+  local bazarr_port
+  local qbittorrent_port
+  local jellyfin_port
+  local seerr_port
+  local npm_port
+
+  host_ip="$(
+    hostname -I 2>/dev/null |
+      awk '{print $1}'
+  )"
+
+  [[ -n "$host_ip" ]] || host_ip="localhost"
+
+  sonarr_port="$(env_get SONARR_PORT)"
+  radarr_port="$(env_get RADARR_PORT)"
+  prowlarr_port="$(env_get PROWLARR_PORT)"
+  bazarr_port="$(env_get BAZARR_PORT)"
+  qbittorrent_port="$(env_get QBITTORRENT_WEBUI_PORT)"
+  jellyfin_port="$(env_get JELLYFIN_PORT)"
+  seerr_port="$(env_get SEERR_PORT)"
+  npm_port="$(env_get NPM_ADMIN_PORT)"
+
+  sonarr_port="${sonarr_port:-8989}"
+  radarr_port="${radarr_port:-7878}"
+  prowlarr_port="${prowlarr_port:-9696}"
+  bazarr_port="${bazarr_port:-6767}"
+  qbittorrent_port="${qbittorrent_port:-8080}"
+  jellyfin_port="${jellyfin_port:-8096}"
+  seerr_port="${seerr_port:-5055}"
+  npm_port="${npm_port:-81}"
+
+  printf '\n'
+  printf '  %-22s %s\n' "Sonarr:"       "http://$host_ip:$sonarr_port"
+  printf '  %-22s %s\n' "Radarr:"       "http://$host_ip:$radarr_port"
+  printf '  %-22s %s\n' "Prowlarr:"     "http://$host_ip:$prowlarr_port"
+  printf '  %-22s %s\n' "Bazarr:"       "http://$host_ip:$bazarr_port"
+  printf '  %-22s %s\n' "qBittorrent:"  "http://$host_ip:$qbittorrent_port"
+  printf '  %-22s %s\n' "Jellyfin:"     "http://$host_ip:$jellyfin_port"
+  printf '  %-22s %s\n' "Seerr:"        "http://$host_ip:$seerr_port"
+  printf '  %-22s %s\n' "NPM Admin:"    "http://$host_ip:$npm_port"
+
+  printf '\n'
+  info "Use the addresses above from another device on the same network."
+  info "On this machine, you can also replace $host_ip with localhost."
+}
+
 # ------------------------------------------------------------------------------
 # Future application-level bootstrap
 # ------------------------------------------------------------------------------
@@ -319,6 +373,7 @@ run_quick_configuration() {
   local qbittorrent_bootstrap="$PROJECT_ROOT/bootstrap/qbittorrent/setup.sh"
   local sonarr_bootstrap="$PROJECT_ROOT/bootstrap/sonarr/setup.sh"
   local radarr_bootstrap="$PROJECT_ROOT/bootstrap/radarr/setup.sh"
+  local bazarr_bootstrap="$PROJECT_ROOT/bootstrap/bazarr/setup.sh"
 
   # checks for if they config enable them in .env, add based on added setups. 
   if [[ "$(env_get QUICK_CONFIG_PROWLARR)" == "true" ]]; then
@@ -356,6 +411,16 @@ run_quick_configuration() {
     bash "$radarr_bootstrap"
     info "Radarr Quick Configuration completed."
   fi
+
+  if [[ "$(env_get QUICK_CONFIG_BAZARR)" == "true" ]]; then
+    [[ -f "$bazarr_bootstrap" ]] ||
+      fatal "Missing Bazarr bootstrap: $bazarr_bootstrap"
+
+    info "Running Bazarr Quick Configuration..."
+    bash "$bazarr_bootstrap"
+    info "Bazarr Quick Configuration completed."
+  fi
+
 }
 # ------------------------------------------------------------------------------
 # Quick Setup
@@ -386,6 +451,8 @@ quick_setup() {
 
   heading "STACK STATUS"
   compose_quick ps
+  
+  show_service_links
 
   heading "QUICK SETUP COMPLETE"
   info "The Docker infrastructure is running."
