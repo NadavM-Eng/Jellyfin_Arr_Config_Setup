@@ -124,11 +124,28 @@ Install jq manually, then run the installer again."
 env_get() {
   local key="$1"
   local line
-  line="$(grep -E "^[[:space:]]*${key}=" "$ENV_FILE" 2>/dev/null | tail -n 1 || true)"
-  line="${line#*=}"
-  line="${line%\"}"
-  line="${line#\"}"
-  printf '%s' "$line"
+  local value
+
+  line="$(
+    grep -E "^[[:space:]]*${key}[[:space:]]*=" "$ENV_FILE" 2>/dev/null |
+      tail -n 1 ||
+      true
+  )"
+
+  value="${line#*=}"
+
+  # Trim leading whitespace
+  value="${value#"${value%%[![:space:]]*}"}"
+
+  # Trim trailing whitespace
+  value="${value%"${value##*[![:space:]]}"}"
+
+  # Remove surrounding quotes
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+
+  printf '%s' "$value"
 }
 
 initialize_env() {
@@ -170,6 +187,8 @@ DUCKDNS_TOKEN=
 # qBittorrent
 QBITTORRENT_WEBUI_PORT=8080
 QBITTORRENT_TORRENTING_PORT=6881
+QBITTORRENT_USERNAME=admin
+QBITTORRENT_PASSWORD=adminadmin
 
 # TRAWL
 TRAWL_BROWSER_POOL_SIZE=1
@@ -185,13 +204,10 @@ ANIMETOSHO_API_KEY=
 FUZER_COOKIE=
 HEBITS_COOKIE=
 
-# -----------------------------------------------------------------------------
-# Future Quick Configuration switches
-# These do nothing yet. They reserve the structure for the bootstrap stage.
-# -----------------------------------------------------------------------------
-QUICK_CONFIG_QBITTORRENT=false
-QUICK_CONFIG_SONARR=false
-QUICK_CONFIG_RADARR=false
+# Quick Configs 
+QUICK_CONFIG_QBITTORRENT=true
+QUICK_CONFIG_SONARR=true
+QUICK_CONFIG_RADARR=true
 QUICK_CONFIG_PROWLARR=true
 QUICK_CONFIG_SEERR=false
 QUICK_CONFIG_JELLYFIN=false
@@ -302,6 +318,7 @@ run_quick_configuration() {
   local prowlarr_bootstrap="$PROJECT_ROOT/bootstrap/prowlarr/setup.sh"
   local qbittorrent_bootstrap="$PROJECT_ROOT/bootstrap/qbittorrent/setup.sh"
   local sonarr_bootstrap="$PROJECT_ROOT/bootstrap/sonarr/setup.sh"
+  local radarr_bootstrap="$PROJECT_ROOT/bootstrap/radarr/setup.sh"
 
   # checks for if they config enable them in .env, add based on added setups. 
   if [[ "$(env_get QUICK_CONFIG_PROWLARR)" == "true" ]]; then
@@ -331,7 +348,14 @@ run_quick_configuration() {
     info "Sonarr Quick Configuration completed."
   fi
 
-  info "Application Quick Configuration completed."
+  if [[ "$(env_get QUICK_CONFIG_RADARR)" == "true" ]]; then
+    [[ -f "$radarr_bootstrap" ]] ||
+      fatal "Missing Radarr bootstrap: $radarr_bootstrap"
+
+    info "Running Radarr Quick Configuration..."
+    bash "$radarr_bootstrap"
+    info "Radarr Quick Configuration completed."
+  fi
 }
 # ------------------------------------------------------------------------------
 # Quick Setup
@@ -365,7 +389,7 @@ quick_setup() {
 
   heading "QUICK SETUP COMPLETE"
   info "The Docker infrastructure is running."
-  info "Application-level Quick Configuration will be added in the bootstrap stage."
+  info "Application Quick Configuration completed successfully."
 }
 
 # ------------------------------------------------------------------------------
