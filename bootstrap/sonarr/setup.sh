@@ -343,7 +343,29 @@ source "$CUSTOM_FORMAT_BOOTSTRAP"
 configure_custom_formats
 verify_custom_formats
 
+configure_custom_formats
+verify_custom_formats
+
+
+# Stage 3
 printf '\n'
 printf '============================================================\n'
-printf 'SONARR STAGE 1 + 2 COMPLETE\n'
+printf 'SONARR QUICK CONFIGURATION - STAGE 3\n'
+printf '============================================================\n'
+
+PROFILE_BOOTSTRAP="$PROJECT_ROOT/bootstrap/sonarr/profiles.sh"
+
+[[ -f "$PROFILE_BOOTSTRAP" ]] ||
+    fatal "Missing Sonarr Quality Profile bootstrap: $PROFILE_BOOTSTRAP"
+
+# shellcheck disable=SC1090
+source "$PROFILE_BOOTSTRAP"
+
+configure_quality_profiles
+verify_quality_profiles
+
+
+printf '\n'
+printf '============================================================\n'
+printf 'SONARR STAGE 1 + 2 + 3 COMPLETE\n'
 printf '============================================================\n'
