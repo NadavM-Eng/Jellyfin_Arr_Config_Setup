@@ -1,14 +1,14 @@
 {
-  "name": "NO KAF, NO FRANCE",
+  "name": "NO KAF, NO FRENCH",
   "includeCustomFormatWhenRenaming": false,
   "specifications": [
     {
-      "name": "Not KAF",
+      "name": "Not KAF, NO FRENCH",
       "implementation": "ReleaseTitleSpecification",
       "negate": false,
       "required": false,
       "fields": {
-        "value": "\\b(KAF|UIndex.org|france|France)\\b"
+        "value": "\\b(KAF|UIndex.org|french|FRENCH|SUBFRENCH)\\b"
       }
     }
   ]
