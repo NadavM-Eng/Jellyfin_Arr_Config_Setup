@@ -343,10 +343,6 @@ source "$CUSTOM_FORMAT_BOOTSTRAP"
 configure_custom_formats
 verify_custom_formats
 
-configure_custom_formats
-verify_custom_formats
-
-
 # Stage 3
 printf '\n'
 printf '============================================================\n'
@@ -364,8 +360,24 @@ source "$PROFILE_BOOTSTRAP"
 configure_quality_profiles
 verify_quality_profiles
 
+# Stage 4B
+printf '\n'
+printf '============================================================\n'
+printf 'SONARR QUICK CONFIGURATION - STAGE 4B\n'
+printf '============================================================\n'
+
+DOWNLOAD_CLIENT_BOOTSTRAP="$PROJECT_ROOT/bootstrap/sonarr/download-clients.sh"
+
+[[ -f "$DOWNLOAD_CLIENT_BOOTSTRAP" ]] ||
+    fatal "Missing Sonarr Download Client bootstrap: $DOWNLOAD_CLIENT_BOOTSTRAP"
+
+# shellcheck disable=SC1090
+source "$DOWNLOAD_CLIENT_BOOTSTRAP"
+
+configure_qbittorrent_download_client
+verify_qbittorrent_download_client
 
 printf '\n'
 printf '============================================================\n'
-printf 'SONARR STAGE 1 + 2 + 3 COMPLETE\n'
+printf 'SONARR STAGE 1 + 2 + 3 + 4 COMPLETE\n'
 printf '============================================================\n'

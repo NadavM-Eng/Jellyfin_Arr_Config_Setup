@@ -43,6 +43,7 @@ CONFIG_DIRS=(
 DATA_DIRS=(
   "torrents/movies"
   "torrents/tv"
+  "torrents/anime"
   "usenet/incomplete"
   "usenet/complete/movies"
   "usenet/complete/tv"
@@ -297,32 +298,40 @@ validate_quick_stack() {
 run_quick_configuration() {
   heading "APPLICATION QUICK CONFIGURATION"
 
-  local prowlarr_bootstrap
-  prowlarr_bootstrap="$PROJECT_ROOT/bootstrap/prowlarr/setup.sh"
+  # add main setup.sh of an appliction
+  local prowlarr_bootstrap="$PROJECT_ROOT/bootstrap/prowlarr/setup.sh"
+  local qbittorrent_bootstrap="$PROJECT_ROOT/bootstrap/qbittorrent/setup.sh"
+  local sonarr_bootstrap="$PROJECT_ROOT/bootstrap/sonarr/setup.sh"
 
-  # ---------------------------------------------------------------------------
-  # Prowlarr
-  # ---------------------------------------------------------------------------
-
+  # checks for if they config enable them in .env, add based on added setups. 
   if [[ "$(env_get QUICK_CONFIG_PROWLARR)" == "true" ]]; then
     [[ -f "$prowlarr_bootstrap" ]] ||
       fatal "Missing Prowlarr bootstrap: $prowlarr_bootstrap"
 
     info "Running Prowlarr Quick Configuration..."
-
     bash "$prowlarr_bootstrap"
-
     info "Prowlarr Quick Configuration completed."
-  else
-    info "Prowlarr Quick Configuration is disabled."
   fi
 
-  # FUTURE:
-  # - Configure qBittorrent categories and paths
-  # - Connect Sonarr -> qBittorrent
-  # - Connect Radarr -> qBittorrent
-  # - Connect Seerr -> Sonarr/Radarr
-  # - Initialize Jellyfin libraries
+  if [[ "$(env_get QUICK_CONFIG_QBITTORRENT)" == "true" ]]; then
+    [[ -f "$qbittorrent_bootstrap" ]] ||
+      fatal "Missing qBittorrent bootstrap: $qbittorrent_bootstrap"
+
+    info "Running qBittorrent Quick Configuration..."
+    bash "$qbittorrent_bootstrap"
+    info "qBittorrent Quick Configuration completed."
+  fi
+
+  if [[ "$(env_get QUICK_CONFIG_SONARR)" == "true" ]]; then
+    [[ -f "$sonarr_bootstrap" ]] ||
+      fatal "Missing Sonarr bootstrap: $sonarr_bootstrap"
+
+    info "Running Sonarr Quick Configuration..."
+    bash "$sonarr_bootstrap"
+    info "Sonarr Quick Configuration completed."
+  fi
+
+  info "Application Quick Configuration completed."
 }
 # ------------------------------------------------------------------------------
 # Quick Setup
