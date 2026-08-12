@@ -272,6 +272,12 @@ configure_sonarr() {
       ]
     },
     {
+      "name": "animeSyncCategories",
+      "value": [
+        5070
+      ]
+    },
+    {
       "name": "syncAnimeStandardFormatSearch",
       "value": true
     },

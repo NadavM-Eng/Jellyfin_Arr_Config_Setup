@@ -79,6 +79,45 @@ check_docker() {
 }
 
 # ------------------------------------------------------------------------------
+# Bootstrap dependencies
+# ------------------------------------------------------------------------------
+
+ensure_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    info "jq is available."
+    return
+  fi
+
+  heading "INSTALLING JQ"
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    fatal "jq is required for Prowlarr Quick Configuration.
+
+Automatic jq installation currently supports Debian/Ubuntu/Linux Mint systems.
+Install jq manually, then run the installer again."
+  fi
+
+  local sudo_cmd=()
+
+  if (( EUID != 0 )); then
+    command -v sudo >/dev/null 2>&1 ||
+      fatal "jq must be installed, but sudo is not available."
+
+    sudo_cmd=(sudo)
+  fi
+
+  info "jq was not found. Installing it..."
+
+  "${sudo_cmd[@]}" apt-get update
+  "${sudo_cmd[@]}" apt-get install -y jq
+
+  command -v jq >/dev/null 2>&1 ||
+    fatal "jq installation completed but jq still cannot be found."
+
+  info "jq installed successfully."
+}
+
+# ------------------------------------------------------------------------------
 # .env initialization
 # ------------------------------------------------------------------------------
 env_get() {
@@ -139,6 +178,12 @@ TRAWL_MITM_ENABLED=false
 TRAWL_MITM_MAX_TIER=3
 TRAWL_MITM_DEBUG=false
 
+# Prowlarr private indexers
+# Optional. Leave blank to skip the corresponding indexer.
+ANIMETOSHO_API_KEY=
+FUZER_COOKIE=
+HEBITS_COOKIE=
+
 # -----------------------------------------------------------------------------
 # Future Quick Configuration switches
 # These do nothing yet. They reserve the structure for the bootstrap stage.
@@ -146,7 +191,7 @@ TRAWL_MITM_DEBUG=false
 QUICK_CONFIG_QBITTORRENT=false
 QUICK_CONFIG_SONARR=false
 QUICK_CONFIG_RADARR=false
-QUICK_CONFIG_PROWLARR=false
+QUICK_CONFIG_PROWLARR=true
 QUICK_CONFIG_SEERR=false
 QUICK_CONFIG_JELLYFIN=false
 QUICK_CONFIG_TRAWL=false
@@ -250,22 +295,41 @@ validate_quick_stack() {
 # Future application-level bootstrap
 # ------------------------------------------------------------------------------
 run_quick_configuration() {
-  # FUTURE IMPLEMENTATION:
+  heading "APPLICATION QUICK CONFIGURATION"
+
+  local prowlarr_bootstrap
+  prowlarr_bootstrap="$PROJECT_ROOT/bootstrap/prowlarr/setup.sh"
+
+  # ---------------------------------------------------------------------------
+  # Prowlarr
+  # ---------------------------------------------------------------------------
+
+  if [[ "$(env_get QUICK_CONFIG_PROWLARR)" == "true" ]]; then
+    [[ -f "$prowlarr_bootstrap" ]] ||
+      fatal "Missing Prowlarr bootstrap: $prowlarr_bootstrap"
+
+    info "Running Prowlarr Quick Configuration..."
+
+    bash "$prowlarr_bootstrap"
+
+    info "Prowlarr Quick Configuration completed."
+  else
+    info "Prowlarr Quick Configuration is disabled."
+  fi
+
+  # FUTURE:
   # - Configure qBittorrent categories and paths
   # - Connect Sonarr -> qBittorrent
   # - Connect Radarr -> qBittorrent
-  # - Connect Prowlarr -> Sonarr/Radarr
-  # - Configure TRAWL proxy in Prowlarr
   # - Connect Seerr -> Sonarr/Radarr
   # - Initialize Jellyfin libraries
-  :
 }
-
 # ------------------------------------------------------------------------------
 # Quick Setup
 # ------------------------------------------------------------------------------
 quick_setup() {
   check_docker
+  ensure_jq
   initialize_env
   initialize_directories
   load_quick_files
