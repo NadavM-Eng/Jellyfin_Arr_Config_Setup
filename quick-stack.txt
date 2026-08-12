@@ -2,7 +2,7 @@
 #
 # Add one Compose file per line.
 # Blank lines and lines beginning with # are ignored.
-# Both setup.sh and setup.ps1 read this same file.
+# Both linux-setup.sh and windows-setup.ps1 use this manifest.
 
 compose/base.yml
 

@@ -322,7 +322,6 @@ configure_qbittorrent_download_client() {
 
     local schema
     local existing
-    local source
     local desired
     local client_id
 

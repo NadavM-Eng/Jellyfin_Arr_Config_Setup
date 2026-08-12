@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ==============================================================================
-# MasterBuilder - Linux / WSL Installer
+# MasterBuilder - Linux Installer
 # ==============================================================================
 # Requirements: Bash + Docker + Docker Compose v2
 #
@@ -66,6 +66,18 @@ warn()  { printf '[!] %s\n' "$1"; }
 fatal() { printf '[X] %s\n' "$1" >&2; exit 1; }
 
 # ------------------------------------------------------------------------------
+# Linux dependency management
+# ------------------------------------------------------------------------------
+
+DEPENDENCY_HELPER="$PROJECT_ROOT/lib/linux/dependencies.sh"
+
+[[ -f "$DEPENDENCY_HELPER" ]] ||
+  fatal "Missing Linux dependency helper: $DEPENDENCY_HELPER"
+
+# shellcheck disable=SC1090
+source "$DEPENDENCY_HELPER"
+
+# ------------------------------------------------------------------------------
 # Docker checks
 # ------------------------------------------------------------------------------
 check_docker() {
@@ -77,45 +89,6 @@ check_docker() {
 
   info "Docker is available."
   info "Docker Compose is available."
-}
-
-# ------------------------------------------------------------------------------
-# Bootstrap dependencies
-# ------------------------------------------------------------------------------
-
-ensure_jq() {
-  if command -v jq >/dev/null 2>&1; then
-    info "jq is available."
-    return
-  fi
-
-  heading "INSTALLING JQ"
-
-  if ! command -v apt-get >/dev/null 2>&1; then
-    fatal "jq is required for Prowlarr Quick Configuration.
-
-Automatic jq installation currently supports Debian/Ubuntu/Linux Mint systems.
-Install jq manually, then run the installer again."
-  fi
-
-  local sudo_cmd=()
-
-  if (( EUID != 0 )); then
-    command -v sudo >/dev/null 2>&1 ||
-      fatal "jq must be installed, but sudo is not available."
-
-    sudo_cmd=(sudo)
-  fi
-
-  info "jq was not found. Installing it..."
-
-  "${sudo_cmd[@]}" apt-get update
-  "${sudo_cmd[@]}" apt-get install -y jq
-
-  command -v jq >/dev/null 2>&1 ||
-    fatal "jq installation completed but jq still cannot be found."
-
-  info "jq installed successfully."
 }
 
 # ------------------------------------------------------------------------------
@@ -163,11 +136,12 @@ initialize_env() {
   fi
 
   local puid pgid default_config default_data config_root data_root
-  local jellyfin_password
+  local jellyfin_password qbittorrent_password
 
   puid="$(id -u)"
   pgid="$(id -g)"
   jellyfin_password="$(generate_secret)"
+  qbittorrent_password="$(generate_secret)"
 
   default_config="$PROJECT_ROOT/runtime/config"
   default_data="$PROJECT_ROOT/runtime/data"
@@ -181,7 +155,9 @@ initialize_env() {
   data_root="${data_root:-$default_data}"
 
   cat > "$ENV_FILE" <<ENVEOF
-# MasterBuilder environment
+# ==============================================================================
+# MasterBuilder Environment
+# ==============================================================================
 
 PUID=$puid
 PGID=$pgid
@@ -190,24 +166,85 @@ TZ=Asia/Jerusalem
 CONFIG_ROOT="$config_root"
 DATA_ROOT="$data_root"
 
-# Reverse Proxy / DuckDNS
-DUCKDNS_SUBDOMAINS=
-DUCKDNS_TOKEN=
 
-# Jellyfin
+# ------------------------------------------------------------------------------
+# Service ports
+# ------------------------------------------------------------------------------
+
+NPM_HTTP_PORT=80
+NPM_HTTPS_PORT=4443
+NPM_ADMIN_PORT=81
+
 JELLYFIN_PORT=8096
+SONARR_PORT=8989
+RADARR_PORT=7878
+BAZARR_PORT=6767
+PROWLARR_PORT=9696
+
+QBITTORRENT_WEBUI_PORT=8080
+QBITTORRENT_TORRENTING_PORT=6881
+
+SEERR_PORT=5055
+
+
+# ------------------------------------------------------------------------------
+# Jellyfin
+# ------------------------------------------------------------------------------
+
 JELLYFIN_ADMIN_USERNAME=admin
 JELLYFIN_ADMIN_PASSWORD=$jellyfin_password
 JELLYFIN_SERVER_NAME=Jellyfin
 JELLYFIN_ENABLE_REMOTE_ACCESS=true
 
-# qBittorrent
-QBITTORRENT_WEBUI_PORT=8080
-QBITTORRENT_TORRENTING_PORT=6881
-QBITTORRENT_USERNAME=admin
-QBITTORRENT_PASSWORD=adminadmin
 
+# ------------------------------------------------------------------------------
+# qBittorrent
+# ------------------------------------------------------------------------------
+
+QBITTORRENT_USERNAME=admin
+QBITTORRENT_PASSWORD=$qbittorrent_password
+
+
+# ------------------------------------------------------------------------------
+# Seerr
+# ------------------------------------------------------------------------------
+
+SEERR_ADMIN_EMAIL=admin@localhost
+SEERR_LOG_LEVEL=info
+
+
+# ------------------------------------------------------------------------------
+# Bazarr / OpenSubtitles.com
+# Optional
+# ------------------------------------------------------------------------------
+
+BAZARR_OPENSUBTITLES_USERNAME=
+BAZARR_OPENSUBTITLES_PASSWORD=
+
+
+# ------------------------------------------------------------------------------
+# Prowlarr private indexers
+# Optional - leave blank to skip.
+# ------------------------------------------------------------------------------
+
+ANIMETOSHO_API_KEY=
+FUZER_COOKIE=
+HEBITS_COOKIE=
+
+
+# ------------------------------------------------------------------------------
+# DuckDNS
+# Optional
+# ------------------------------------------------------------------------------
+
+DUCKDNS_SUBDOMAINS=
+DUCKDNS_TOKEN=
+
+
+# ------------------------------------------------------------------------------
 # TRAWL
+# ------------------------------------------------------------------------------
+
 TRAWL_BROWSER_POOL_SIZE=1
 TRAWL_PROXY_URL=
 TRAWL_RESIDENTIAL_PROXY_URL=
@@ -215,26 +252,28 @@ TRAWL_MITM_ENABLED=false
 TRAWL_MITM_MAX_TIER=3
 TRAWL_MITM_DEBUG=false
 
-# Prowlarr private indexers
-# Optional. Leave blank to skip the corresponding indexer.
-ANIMETOSHO_API_KEY=
-FUZER_COOKIE=
-HEBITS_COOKIE=
 
-# Quick Configs 
+# ------------------------------------------------------------------------------
+# Automatic application configuration
+# ------------------------------------------------------------------------------
+
 QUICK_CONFIG_QBITTORRENT=true
 QUICK_CONFIG_SONARR=true
 QUICK_CONFIG_RADARR=true
 QUICK_CONFIG_PROWLARR=true
-QUICK_CONFIG_SEERR=true
-QUICK_CONFIG_JELLYFIN=true
-QUICK_CONFIG_TRAWL=false
 QUICK_CONFIG_BAZARR=true
+QUICK_CONFIG_JELLYFIN=true
+QUICK_CONFIG_SEERR=true
+
+# Reserved for a future TRAWL application-level bootstrap.
+QUICK_CONFIG_TRAWL=false
 ENVEOF
 
   info "Created $ENV_FILE"
   info "Jellyfin administrator username: admin"
   info "Jellyfin administrator password was generated and stored in .env."
+  info "qBittorrent administrator username: admin"
+  info "qBittorrent administrator password was generated and stored in .env."
 }
 
 # ------------------------------------------------------------------------------
@@ -569,7 +608,7 @@ show_service_links() {
 }
 
 # ------------------------------------------------------------------------------
-# Future application-level bootstrap
+# Application-level Quick Configuration
 # ------------------------------------------------------------------------------
 run_quick_configuration() {
   heading "APPLICATION QUICK CONFIGURATION"
@@ -639,8 +678,8 @@ run_quick_configuration() {
   fi
 
   if [[ "$(env_get QUICK_CONFIG_SEERR)" == "true" ]]; then
-   [[ -f "$seerr_bootstrap" ]] ||
-    fatal "Missing Seerr bootstrap: $seerr_bootstrap"
+    [[ -f "$seerr_bootstrap" ]] ||
+      fatal "Missing Seerr bootstrap: $seerr_bootstrap"
 
     info "Running Seerr Quick Configuration..."
     bash "$seerr_bootstrap"
@@ -652,8 +691,12 @@ run_quick_configuration() {
 # Quick Setup
 # ------------------------------------------------------------------------------
 quick_setup() {
+
+  ensure_linux_dependencies \
+    "$PROJECT_ROOT/linux-setup.sh" \
+       quick
+
   check_docker
-  ensure_jq
   initialize_env
   initialize_directories
   load_quick_files
@@ -715,7 +758,7 @@ main() {
       esac
       ;;
     *)
-      fatal "Usage: ./setup.sh [quick|verify|custom]"
+      fatal "Usage: ./linux-setup.sh [quick|verify|custom]"
       ;;
   esac
 }

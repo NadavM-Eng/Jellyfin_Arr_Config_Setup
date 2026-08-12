@@ -480,16 +480,18 @@ verify_qbittorrent() {
     printf 'Categories:\n'
 
     printf '%s' "$categories" |
-        jq -r \
-            --arg sonarr "$QBIT_SONARR_CATEGORY" \
-            --arg radarr "$QBIT_RADARR_CATEGORY" '
-                .[$sonarr],
-                .[$radarr]
+    jq -r \
+        --arg sonarr "$QBIT_SONARR_CATEGORY" \
+        --arg radarr "$QBIT_RADARR_CATEGORY" \
+        --arg anime "$QBIT_ANIME_CATEGORY" '
+            .[$sonarr],
+            .[$radarr],
+            .[$anime]
 
-                | select(. != null)
+            | select(. != null)
 
-                | "    \(.name) -> \(.savePath)"
-            '
+            | "    \(.name) -> \(.savePath)"
+        '
 
     printf '\n'
 }

@@ -12,7 +12,6 @@ set -Eeuo pipefail
 # Safe to run multiple times:
 # existing entries are detected and skipped.
 #
-# Indexers are NOT configured here yet.
 # ==============================================================================
 
 PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
