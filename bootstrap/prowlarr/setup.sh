@@ -549,7 +549,7 @@ configure_trawl() {
 JSON
 )"
 
-    prowlarr_post "/api/v1/indexerproxy" "$payload"
+    prowlarr_post_capture "/api/v1/indexerproxy" "$payload"
 
     info "TRAWL proxy added."
 }
