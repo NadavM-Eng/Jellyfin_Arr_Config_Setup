@@ -63,7 +63,7 @@ wait_for_bazarr_config() {
     local waited=0
     local config=""
 
-    info "Waiting for Bazarr configuration..."
+    info "Waiting for Bazarr configuration..." >&2
 
     while (( waited < 120 )); do
 
