@@ -416,6 +416,7 @@ verify_stack_integrity() {
   local config_root
   local failures=0
   local host_dir
+  local container_dir
 
   config_root="$(env_get CONFIG_ROOT)"
 
@@ -432,6 +433,13 @@ verify_stack_integrity() {
     radarr
     bazarr
     jellyfin
+    seerr
+  )
+
+  # Most applications use /config.
+  # Only exceptions need to be declared here.
+  local -A config_mount_overrides=(
+    [seerr]="/app/config"
   )
 
   local service
@@ -445,10 +453,12 @@ verify_stack_integrity() {
 
     host_dir="$config_root/$service"
 
+    container_dir="${config_mount_overrides[$service]:-/config}"
+
     check_config_mount \
       "$service" \
       "$host_dir" \
-      "/config" ||
+      "$container_dir" ||
       ((failures += 1))
 
   done
@@ -571,6 +581,7 @@ run_quick_configuration() {
   local radarr_bootstrap="$PROJECT_ROOT/bootstrap/radarr/setup.sh"
   local bazarr_bootstrap="$PROJECT_ROOT/bootstrap/bazarr/setup.sh"
   local jellyfin_bootstrap="$PROJECT_ROOT/bootstrap/jellyfin/setup.sh"
+  local seerr_bootstrap="$PROJECT_ROOT/bootstrap/seerr/setup.sh"
 
   # checks for if they config enable them in .env, add based on added setups. 
   if [[ "$(env_get QUICK_CONFIG_PROWLARR)" == "true" ]]; then
@@ -625,6 +636,15 @@ run_quick_configuration() {
     info "Running Jellyfin Quick Configuration..."
     bash "$jellyfin_bootstrap"
     info "Jellyfin Quick Configuration completed."
+  fi
+
+  if [[ "$(env_get QUICK_CONFIG_SEERR)" == "true" ]]; then
+   [[ -f "$seerr_bootstrap" ]] ||
+    fatal "Missing Seerr bootstrap: $seerr_bootstrap"
+
+    info "Running Seerr Quick Configuration..."
+    bash "$seerr_bootstrap"
+    info "Seerr Quick Configuration completed."
   fi
 
 }
