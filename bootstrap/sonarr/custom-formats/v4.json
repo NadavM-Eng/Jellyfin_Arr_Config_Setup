@@ -1,0 +1,15 @@
+{
+  "name": "v4",
+  "includeCustomFormatWhenRenaming": true,
+  "specifications": [
+    {
+      "name": "v4",
+      "implementation": "ReleaseTitleSpecification",
+      "negate": false,
+      "required": false,
+      "fields": {
+        "value": "(\\b|\\d)(v4)\\b"
+      }
+    }
+  ]
+}

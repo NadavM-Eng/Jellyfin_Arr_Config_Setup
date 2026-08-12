@@ -321,11 +321,29 @@ printf '============================================================\n'
 
 wait_for_sonarr
 
+# Stage 1
 configure_root_folders
 configure_naming
 verify_configuration
 
 printf '\n'
 printf '============================================================\n'
-printf 'SONARR STAGE 1 COMPLETE\n'
+printf 'SONARR QUICK CONFIGURATION - STAGE 2\n'
+printf '============================================================\n'
+
+# Stage 2
+CUSTOM_FORMAT_BOOTSTRAP="$PROJECT_ROOT/bootstrap/sonarr/custom-formats.sh"
+
+[[ -f "$CUSTOM_FORMAT_BOOTSTRAP" ]] ||
+    fatal "Missing Sonarr Custom Format bootstrap: $CUSTOM_FORMAT_BOOTSTRAP"
+
+# shellcheck disable=SC1090
+source "$CUSTOM_FORMAT_BOOTSTRAP"
+
+configure_custom_formats
+verify_custom_formats
+
+printf '\n'
+printf '============================================================\n'
+printf 'SONARR STAGE 1 + 2 COMPLETE\n'
 printf '============================================================\n'
