@@ -185,17 +185,149 @@ prowlarr_get() {
 }
 
 
-prowlarr_post() {
+# ------------------------------------------------------------------------------
+# Prowlarr POST helpers
+# ------------------------------------------------------------------------------
+
+PROWLARR_LAST_HTTP_STATUS=""
+PROWLARR_LAST_RESPONSE=""
+
+
+prowlarr_post_capture() {
     local endpoint="$1"
     local payload="$2"
 
-    curl -fsS \
-        -X POST \
-        -H "X-Api-Key: $PROWLARR_API_KEY" \
-        -H "Content-Type: application/json" \
-        --data "$payload" \
-        "$PROWLARR_HOST_URL$endpoint" \
-        >/dev/null
+    local response_file
+
+    response_file="$(mktemp)"
+
+    PROWLARR_LAST_HTTP_STATUS="$(
+        curl -sS \
+            -o "$response_file" \
+            -w '%{http_code}' \
+            -X POST \
+            -H "X-Api-Key: $PROWLARR_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "$PROWLARR_HOST_URL$endpoint" \
+            || true
+    )"
+
+    PROWLARR_LAST_RESPONSE="$(
+        cat "$response_file"
+    )"
+
+    rm -f "$response_file"
+}
+
+
+wait_for_application_exists() {
+    local implementation="$1"
+    local timeout="${2:-10}"
+
+    local waited=0
+
+    while (( waited < timeout )); do
+
+        if application_exists "$implementation"; then
+            return 0
+        fi
+
+        sleep 1
+        ((waited += 1))
+    done
+
+    return 1
+}
+
+
+create_application_with_retry() {
+    local implementation="$1"
+    local display_name="$2"
+    local payload="$3"
+
+    local attempt
+    local max_attempts=6
+
+    if application_exists "$implementation"; then
+        info "$display_name already exists in Prowlarr. Skipping."
+        return
+    fi
+
+
+    for (( attempt=1; attempt<=max_attempts; attempt++ )); do
+
+        info "Adding $display_name to Prowlarr..."
+
+        prowlarr_post_capture \
+            "/api/v1/applications" \
+            "$payload"
+
+
+        # ----------------------------------------------------------------------
+        # Prowlarr may return an error while the application was still created.
+        #
+        # Give the application a few seconds to appear before deciding that the
+        # POST genuinely failed.
+        # ----------------------------------------------------------------------
+
+        if wait_for_application_exists "$implementation" 10; then
+
+            if [[ "$PROWLARR_LAST_HTTP_STATUS" =~ ^2[0-9][0-9]$ ]]; then
+                info "$display_name added."
+            else
+                warn "$display_name was created despite HTTP $PROWLARR_LAST_HTTP_STATUS."
+            fi
+
+            return
+        fi
+
+
+        # ----------------------------------------------------------------------
+        # Normal success response, but application still has not appeared.
+        # Treat it as transient and retry.
+        # ----------------------------------------------------------------------
+
+        if [[ "$PROWLARR_LAST_HTTP_STATUS" =~ ^2[0-9][0-9]$ ]]; then
+
+            warn "$display_name POST succeeded with HTTP $PROWLARR_LAST_HTTP_STATUS,"
+            warn "but the application has not appeared yet."
+
+        else
+
+            warn "$display_name creation returned HTTP $PROWLARR_LAST_HTTP_STATUS."
+
+            if [[ -n "$PROWLARR_LAST_RESPONSE" ]]; then
+                warn "Prowlarr response:"
+
+                printf '%s\n' "$PROWLARR_LAST_RESPONSE" |
+                    head -c 1000 >&2
+
+                printf '\n' >&2
+            fi
+        fi
+
+
+        if (( attempt < max_attempts )); then
+
+            warn "Retrying $display_name in 3 seconds..."
+            sleep 3
+
+        fi
+    done
+
+
+    # --------------------------------------------------------------------------
+    # One final check before failing.
+    # --------------------------------------------------------------------------
+
+    if application_exists "$implementation"; then
+        info "$display_name exists in Prowlarr."
+        return
+    fi
+
+
+    fatal "Could not configure $display_name in Prowlarr after $max_attempts attempts."
 }
 
 
@@ -294,9 +426,10 @@ configure_sonarr() {
 JSON
 )"
 
-    prowlarr_post "/api/v1/applications" "$payload"
-
-    info "Sonarr added."
+    create_application_with_retry \
+        "Sonarr" \
+        "Sonarr" \
+        "$payload"
 }
 
 
@@ -370,9 +503,10 @@ configure_radarr() {
 JSON
 )"
 
-    prowlarr_post "/api/v1/applications" "$payload"
-
-    info "Radarr added."
+    create_application_with_retry \
+        "Radarr" \
+        "Radarr" \
+        "$payload"
 }
 
 
