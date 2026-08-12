@@ -121,6 +121,12 @@ Install jq manually, then run the installer again."
 # ------------------------------------------------------------------------------
 # .env initialization
 # ------------------------------------------------------------------------------
+
+generate_secret() {
+  od -An -N16 -tx1 /dev/urandom |
+    tr -d ' \n'
+}
+
 env_get() {
   local key="$1"
   local line
@@ -157,8 +163,12 @@ initialize_env() {
   fi
 
   local puid pgid default_config default_data config_root data_root
+  local jellyfin_password
+
   puid="$(id -u)"
   pgid="$(id -g)"
+  jellyfin_password="$(generate_secret)"
+
   default_config="$PROJECT_ROOT/runtime/config"
   default_data="$PROJECT_ROOT/runtime/data"
 
@@ -183,6 +193,13 @@ DATA_ROOT="$data_root"
 # Reverse Proxy / DuckDNS
 DUCKDNS_SUBDOMAINS=
 DUCKDNS_TOKEN=
+
+# Jellyfin
+JELLYFIN_PORT=8096
+JELLYFIN_ADMIN_USERNAME=admin
+JELLYFIN_ADMIN_PASSWORD=$jellyfin_password
+JELLYFIN_SERVER_NAME=Jellyfin
+JELLYFIN_ENABLE_REMOTE_ACCESS=true
 
 # qBittorrent
 QBITTORRENT_WEBUI_PORT=8080
@@ -210,12 +227,14 @@ QUICK_CONFIG_SONARR=true
 QUICK_CONFIG_RADARR=true
 QUICK_CONFIG_PROWLARR=true
 QUICK_CONFIG_SEERR=false
-QUICK_CONFIG_JELLYFIN=false
+QUICK_CONFIG_JELLYFIN=true
 QUICK_CONFIG_TRAWL=false
 QUICK_CONFIG_BAZARR=true
 ENVEOF
 
   info "Created $ENV_FILE"
+  info "Jellyfin administrator username: admin"
+  info "Jellyfin administrator password was generated and stored in .env."
 }
 
 # ------------------------------------------------------------------------------
@@ -281,6 +300,182 @@ compose_quick() {
 
   command+=( "$@" )
   "${command[@]}"
+}
+
+# ------------------------------------------------------------------------------
+# Stack integrity checks
+# ------------------------------------------------------------------------------
+
+check_config_mount() {
+  local service="$1"
+  local host_dir="$2"
+  local container_dir="$3"
+
+  local container_id
+  local probe
+  local host_probe
+
+  container_id="$(compose_quick ps -q "$service" 2>/dev/null || true)"
+
+  [[ -n "$container_id" ]] || {
+    warn "$service container does not exist."
+    return 1
+  }
+
+  if [[ ! -d "$host_dir" ]]; then
+    warn "$service config directory is missing."
+    warn "Expected: $host_dir"
+    return 1
+  fi
+
+  if [[ ! -w "$host_dir" ]]; then
+    warn "$service config directory is not writable."
+    warn "Path: $host_dir"
+    return 1
+  fi
+
+  probe=".masterbuilder-mount-probe-$$-$RANDOM"
+  host_probe="$host_dir/$probe"
+
+  printf 'MasterBuilder mount test\n' > "$host_probe"
+
+  if ! docker exec "$container_id" \
+      test -f "$container_dir/$probe" \
+      >/dev/null 2>&1
+  then
+    rm -f "$host_probe"
+
+    warn "$service config mount is not connected to the current host directory."
+    warn "Host:      $host_dir"
+    warn "Container: $container_dir"
+
+    return 1
+  fi
+
+  rm -f "$host_probe"
+
+  info "$service config mount verified."
+}
+
+
+check_container_health() {
+  local service="$1"
+  local container_id
+  local state
+  local restarts
+  local health
+
+  container_id="$(compose_quick ps -q "$service" 2>/dev/null || true)"
+
+  if [[ -z "$container_id" ]]; then
+    warn "$service container was not found."
+    return 1
+  fi
+
+  state="$(
+    docker inspect \
+      --format '{{.State.Status}}' \
+      "$container_id"
+  )"
+
+  restarts="$(
+    docker inspect \
+      --format '{{.RestartCount}}' \
+      "$container_id"
+  )"
+
+  health="$(
+    docker inspect \
+      --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+      "$container_id"
+  )"
+
+  if [[ "$state" != "running" ]]; then
+    warn "$service is not running. State: $state"
+    return 1
+  fi
+
+  if [[ "$health" == "unhealthy" ]]; then
+    warn "$service reports Docker health status: unhealthy"
+    return 1
+  fi
+
+  if (( restarts >= 5 )); then
+    warn "$service has restarted $restarts times."
+    warn "Possible crash/restart loop."
+    return 1
+  fi
+
+  info "$service container state verified."
+}
+
+
+verify_stack_integrity() {
+  heading "VERIFYING STACK INTEGRITY"
+
+  local config_root
+  local failures=0
+  local host_dir
+
+  config_root="$(env_get CONFIG_ROOT)"
+
+  [[ -n "$config_root" ]] ||
+    fatal "CONFIG_ROOT is missing from .env."
+
+  # Give newly-created containers a few seconds to settle.
+  sleep 3
+
+  local services=(
+    prowlarr
+    qbittorrent
+    sonarr
+    radarr
+    bazarr
+    jellyfin
+  )
+
+  local service
+
+  for service in "${services[@]}"; do
+
+    if ! check_container_health "$service"; then
+      ((failures += 1))
+      continue
+    fi
+
+    host_dir="$config_root/$service"
+
+    check_config_mount \
+      "$service" \
+      "$host_dir" \
+      "/config" ||
+      ((failures += 1))
+
+  done
+
+  if (( failures > 0 )); then
+    printf '\n'
+
+    warn "Stack integrity check found $failures problem(s)."
+
+    fatal "Quick Configuration stopped to avoid modifying a potentially broken installation."
+  fi
+
+  printf '\n'
+  info "Stack integrity check passed."
+}
+
+verify_installation() {
+  check_docker
+
+  [[ -f "$ENV_FILE" ]] ||
+    fatal "Cannot verify installation: .env does not exist."
+
+  load_quick_files
+  verify_stack_integrity
+
+  heading "INSTALLATION VERIFICATION COMPLETE"
+  info "No infrastructure integrity problems were detected."
 }
 
 # ------------------------------------------------------------------------------
@@ -375,6 +570,7 @@ run_quick_configuration() {
   local sonarr_bootstrap="$PROJECT_ROOT/bootstrap/sonarr/setup.sh"
   local radarr_bootstrap="$PROJECT_ROOT/bootstrap/radarr/setup.sh"
   local bazarr_bootstrap="$PROJECT_ROOT/bootstrap/bazarr/setup.sh"
+  local jellyfin_bootstrap="$PROJECT_ROOT/bootstrap/jellyfin/setup.sh"
 
   # checks for if they config enable them in .env, add based on added setups. 
   if [[ "$(env_get QUICK_CONFIG_PROWLARR)" == "true" ]]; then
@@ -422,6 +618,15 @@ run_quick_configuration() {
     info "Bazarr Quick Configuration completed."
   fi
 
+  if [[ "$(env_get QUICK_CONFIG_JELLYFIN)" == "true" ]]; then
+    [[ -f "$jellyfin_bootstrap" ]] ||
+      fatal "Missing Jellyfin bootstrap: $jellyfin_bootstrap"
+
+    info "Running Jellyfin Quick Configuration..."
+    bash "$jellyfin_bootstrap"
+    info "Jellyfin Quick Configuration completed."
+  fi
+
 }
 # ------------------------------------------------------------------------------
 # Quick Setup
@@ -448,6 +653,8 @@ quick_setup() {
   heading "STARTING CONTAINERS"
   compose_quick up -d
 
+  verify_stack_integrity
+
   run_quick_configuration
 
   heading "STACK STATUS"
@@ -468,6 +675,9 @@ main() {
     quick)
       quick_setup
       ;;
+    verify)
+      verify_installation
+      ;;
     custom)
       fatal "Custom Setup is reserved for the next stage. Use Quick Setup for now."
       ;;
@@ -485,7 +695,7 @@ main() {
       esac
       ;;
     *)
-      fatal "Usage: ./setup.sh [quick|custom]"
+      fatal "Usage: ./setup.sh [quick|verify|custom]"
       ;;
   esac
 }
