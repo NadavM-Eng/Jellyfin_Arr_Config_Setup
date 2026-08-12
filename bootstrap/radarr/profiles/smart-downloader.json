@@ -1,0 +1,30 @@
+{
+  "name": "Smart Downloader \\\\ הורדה חכמה",
+  "baseProfile": "Any",
+
+  "upgradeAllowed": true,
+  "upgradeUntilQuality": "Bluray-2160p",
+
+  "manageQualitiesExactly": true,
+
+  "enableQualities": [
+    "HDTV-2160p",
+    "WEB 2160p",
+    "Bluray-2160p",
+    "HDTV-1080p",
+    "WEB 1080p",
+    "Bluray-1080p"
+  ],
+
+  "language": "English",
+
+  "minFormatScore": 1,
+  "cutoffFormatScore": 0,
+  "minUpgradeFormatScore": 1,
+
+  "customFormatScores": {
+    "x265": 3,
+    "10bit": 2,
+    "HDR": 1
+  }
+}

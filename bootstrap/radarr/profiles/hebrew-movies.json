@@ -1,0 +1,29 @@
+{
+  "name": "סרטים הורדה בעברית",
+  "baseProfile": "Any",
+
+  "upgradeAllowed": true,
+  "upgradeUntilQuality": "Bluray-2160p",
+
+  "manageQualitiesExactly": true,
+
+  "enableQualities": [
+    "HDTV-2160p",
+    "WEB 2160p",
+    "Bluray-2160p",
+    "WEB 1080p",
+    "Bluray-1080p"
+  ],
+
+  "language": "Hebrew",
+
+  "minFormatScore": 0,
+  "cutoffFormatScore": 0,
+  "minUpgradeFormatScore": 1,
+
+  "customFormatScores": {
+    "10bit": 0,
+    "HDR": 0,
+    "x265": 0
+  }
+}
