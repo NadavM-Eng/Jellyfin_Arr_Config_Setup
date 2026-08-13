@@ -1,0 +1,26 @@
+{
+  "id": "quick",
+  "name": "Quick",
+  "services": [
+    "media-network",
+    "nginx-proxy-manager",
+    "duckdns",
+    "jellyfin",
+    "sonarr",
+    "radarr",
+    "bazarr",
+    "prowlarr",
+    "trawl",
+    "qbittorrent",
+    "seerr"
+  ],
+  "setups": [
+    "prowlarr",
+    "qbittorrent",
+    "sonarr",
+    "radarr",
+    "bazarr",
+    "jellyfin",
+    "seerr"
+  ]
+}
