@@ -1,0 +1,26 @@
+{
+  "id": "seerr",
+  "name": "Seerr",
+  "composeFiles": [
+    "compose/request-system/seerr.yml"
+  ],
+  "dockerServices": [
+    "seerr"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": {
+    "linuxScript": "bootstrap/seerr/setup.sh",
+    "needsRunning": [
+      "jellyfin",
+      "sonarr",
+      "radarr"
+    ],
+    "runsAfterSetup": [
+      "jellyfin",
+      "sonarr",
+      "radarr"
+    ]
+  }
+}
