@@ -106,14 +106,12 @@ bootstrap/
 Only a proven platform difference may introduce a narrowly named adapter under
 the owning component. Host-wide differences belong outside `bootstrap`.
 
-The following is a target layout, introduced gradually rather than in one large
-move:
+Start with this small layout. Add more folders only when real code needs them:
 
 ```text
-orchestration/
-|-- schemas/                 # versioned component and plan contracts
-|-- components/              # one declarative component definition per file
-`-- profiles/                # Quick and future named presets
+installer/
+|-- services/                # one small file for each available service
+`-- profiles/                # Quick and later saved choices
 
 bootstrap/
 |-- jellyfin/                # Jellyfin and Jellyfin-plugin ownership
@@ -165,25 +163,23 @@ should not be presented as a cross-platform library merely because PowerShell
 or .NET could launch Bash.
 
 
-## Small parts the installer needs
+## Only five parts
 
-The exact schema will be designed and reviewed before implementation, but each
-registered component needs enough information to answer these questions:
+We only need these parts now:
 
-| Brick | Purpose |
-|---|---|
-| Component definition | What the component is, which Compose files/services it owns, and which platforms support it. |
-| Capability definition | Which optional behavior can be selected, such as configuring an app or installing one plugin. |
-| Requirement | What must also be selected. Example: Shokofin requires Shoko and Jellyfin. |
-| Ordering rule | What must finish first. Example: Enhanced's Seerr configuration runs after both Enhanced installation and Seerr setup. |
-| Conflict | Which selections cannot safely coexist. |
-| Input definition | Which path, ordinary value, credential, or secret is needed and how it is validated. |
-| Plan step | One ordered, identifiable, retryable unit with an owner and verification. |
-| Result event | Started, unchanged, changed, warning, failed, verified, or awaiting user action. |
+| Part | Job | Example |
+|---|---|---|
+| Service file | Says what can be installed and which Compose and setup files belong to it. | Jellyfin points to its Compose file and `bootstrap/jellyfin/setup.sh`. |
+| Choice file | Lists what should be installed. | Quick lists everything. Custom will contain the user's choices. |
+| Runner | Reads the choices, checks what they need, and runs them in the right order. | Linux Quick and the future GUI call the same runner. |
+| System helper | Handles work that differs between Linux and Windows. | Linux permissions or Windows path conversion. |
+| Service setup | Configures and checks one app. | Bazarr owns its Sonarr and Radarr connection settings. |
 
-Persisted plans must reference secret keys, not contain secret values. Component
-implementations receive resolved secrets only at execution time and must not log
-them.
+Do not add a general conflict system, retry system, event system, or separate
+saved-plan format now. Add one only when a real feature needs it.
+
+Secrets stay in `.env` or the future Windows secret storage. They do not belong
+in service or choice files.
 
 
 ## Plugin and integration placement
@@ -228,8 +224,8 @@ must stop for your test before work that depends on it begins.
 | MB-002 | complete | Add this task list and link it from `AGENTS.md`. | Project documents | Check the document and link; no setup test is needed. | `added cross-platform installer architecture roadmap` |
 | MB-010 | complete | Write down exactly what the installer starts, configures, and checks today in `docs/current-installer.md`. | Current installer | Compare the document with `quick-stack.txt`, the Compose files, and every setup script. | `added map of what the current installer does` |
 | MB-011 | complete | Write down the current order in `docs/current-run-order.md`: what runs first, what waits, and which parts need other parts. | Run order | Review it with the user before adding more containers, plugins, hooks, or setup scripts. | `added current installer run order` |
-| MB-012 | next | Agree on simple names for each part and say which part owns each job. | Code responsibilities | Check that every part has one clear job. | `added installer part and ownership rules` |
-| MB-020 | planned | Add JSON rules that describe components, Quick choices, and install plans. Nothing will run them yet. | Shared data files | Check good examples and make sure bad examples fail. | `added installer JSON rules and examples` |
+| MB-012 | complete | Keep only five parts: service file, choice file, runner, system helper, and service setup. | Code responsibilities | Check that every part has one clear job and remove ideas we do not need yet. | `modified installer plan to keep the design small` |
+| MB-020 | next | Decide the smallest useful service-file shape by adding one real service file. Do not add a large schema system. | Shared data files | Compare the file with the current Compose and setup files. | `added first shared service file` |
 | MB-021 | planned | Add one data file for each service already supported. | Service list | Compare every file with the current Compose files, paths, ports, and needs. | `added current service definitions` |
 | MB-022 | planned | Add a Quick file that selects everything the current Quick install uses. | Quick choices | Compare it with `quick-stack.txt` and `QUICK_CONFIG_*`; no setup behavior changes. | `added preconfigured Quick installation profile` |
 | MB-023 | planned | Add a command that only shows and checks an install plan. The current installer stays unchanged. | Plan checker | Test good and bad plans and make sure secrets are hidden. Then STOP: the user runs it on the Linux VM. | `added shared installation plan checker` |
