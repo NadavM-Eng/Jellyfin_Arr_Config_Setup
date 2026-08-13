@@ -1,0 +1,14 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "composeFiles": [
+    "compose/media-management/jellyfin.yml"
+  ],
+  "dockerServices": [
+    "jellyfin"
+  ],
+  "setup": {
+    "linuxScript": "bootstrap/jellyfin/setup.sh",
+    "needs": []
+  }
+}
