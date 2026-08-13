@@ -1,0 +1,10 @@
+{
+  "id": "media-network",
+  "name": "Media network",
+  "composeFiles": [
+    "compose/base.yml"
+  ],
+  "dockerServices": [],
+  "needs": [],
+  "setup": null
+}

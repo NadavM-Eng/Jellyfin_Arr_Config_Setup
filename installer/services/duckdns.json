@@ -1,0 +1,14 @@
+{
+  "id": "duckdns",
+  "name": "DuckDNS",
+  "composeFiles": [
+    "compose/reverse-proxy/duckdns.yml"
+  ],
+  "dockerServices": [
+    "duckdns"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": null
+}

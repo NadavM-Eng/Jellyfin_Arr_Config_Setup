@@ -1,0 +1,15 @@
+{
+  "id": "trawl",
+  "name": "TRAWL",
+  "composeFiles": [
+    "compose/bypass/trawl.yml"
+  ],
+  "dockerServices": [
+    "trawl-redis",
+    "trawl"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": null
+}

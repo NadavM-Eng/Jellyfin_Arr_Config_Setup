@@ -1,0 +1,14 @@
+{
+  "id": "nginx-proxy-manager",
+  "name": "Nginx Proxy Manager",
+  "composeFiles": [
+    "compose/reverse-proxy/npm.yml"
+  ],
+  "dockerServices": [
+    "npm"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": null
+}
