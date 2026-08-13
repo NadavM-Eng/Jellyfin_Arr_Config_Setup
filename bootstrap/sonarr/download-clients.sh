@@ -4,14 +4,13 @@
 # MasterBuilder - Sonarr Download Clients
 # ==============================================================================
 #
-# Stage 4B:
-#   - Configure qBittorrent as Sonarr's torrent download client.
-#   - Resolve the qBittorrent schema dynamically from Sonarr.
-#   - Use Docker service discovery: qbittorrent:8080
-#   - Use the qBittorrent category created during Stage 4A.
-#   - Test the connection before saving.
-#   - Update an existing qBittorrent client instead of duplicating it.
-#   - Verify the final configuration.
+# Responsibilities:
+#   - Configure qBittorrent download clients in Sonarr.
+#   - Route normal TV downloads through the "sonarr" qBittorrent category.
+#   - Route Anime downloads through the "anime" qBittorrent category.
+#   - Resolve Sonarr's qBittorrent schema dynamically.
+#   - Test every client before saving it.
+#   - Update existing managed clients instead of duplicating them.
 #
 # This file is sourced by bootstrap/sonarr/setup.sh.
 # ==============================================================================
@@ -25,10 +24,14 @@ QBITTORRENT_WEBUI_PORT="${QBITTORRENT_WEBUI_PORT:-8080}"
 QBITTORRENT_USERNAME="${QBITTORRENT_USERNAME:-admin}"
 QBITTORRENT_PASSWORD="${QBITTORRENT_PASSWORD:-}"
 
-SONARR_QBIT_NAME="qBittorrent"
 SONARR_QBIT_HOST="qbittorrent"
 SONARR_QBIT_PORT="$QBITTORRENT_WEBUI_PORT"
-SONARR_QBIT_CATEGORY="sonarr"
+
+SONARR_QBIT_TV_NAME="qBittorrent"
+SONARR_QBIT_TV_CATEGORY="sonarr"
+
+SONARR_QBIT_ANIME_NAME="qBittorrent Anime"
+SONARR_QBIT_ANIME_CATEGORY="anime"
 
 
 [[ -n "$QBITTORRENT_PASSWORD" ]] ||
@@ -36,7 +39,7 @@ SONARR_QBIT_CATEGORY="sonarr"
 
 
 # ------------------------------------------------------------------------------
-# Locate qBittorrent schema
+# Schema
 # ------------------------------------------------------------------------------
 
 get_qbittorrent_schema() {
@@ -52,28 +55,6 @@ get_qbittorrent_schema() {
         head -n 1
 }
 
-
-# ------------------------------------------------------------------------------
-# Locate existing qBittorrent download client
-# ------------------------------------------------------------------------------
-
-get_existing_qbittorrent_client() {
-    sonarr_get '/api/v3/downloadclient' |
-        jq -c '
-            .[]
-            | select(
-                .implementation == "QBittorrent"
-                or
-                .implementationName == "qBittorrent"
-            )
-        ' |
-        head -n 1
-}
-
-
-# ------------------------------------------------------------------------------
-# Ensure expected schema fields exist
-# ------------------------------------------------------------------------------
 
 require_download_client_field() {
     local payload="$1"
@@ -104,23 +85,53 @@ validate_qbittorrent_schema() {
 
 
 # ------------------------------------------------------------------------------
-# Build desired qBittorrent client
+# Locate managed download clients
+# ------------------------------------------------------------------------------
+
+get_qbittorrent_client_by_name() {
+    local name="$1"
+
+    sonarr_get '/api/v3/downloadclient' |
+        jq -c \
+            --arg name "$name" '
+                .[]
+                | select(
+                    (
+                        .implementation == "QBittorrent"
+                        or
+                        .implementationName == "qBittorrent"
+                    )
+                    and
+                    .name == $name
+                )
+            ' |
+        head -n 1
+}
+
+
+# ------------------------------------------------------------------------------
+# Build desired configuration
 # ------------------------------------------------------------------------------
 
 build_qbittorrent_payload() {
     local source="$1"
+    local name="$2"
+    local category="$3"
+    local tags="$4"
 
     printf '%s' "$source" |
         jq -c \
-            --arg name "$SONARR_QBIT_NAME" \
+            --arg name "$name" \
             --arg host "$SONARR_QBIT_HOST" \
             --argjson port "$SONARR_QBIT_PORT" \
             --arg username "$QBITTORRENT_USERNAME" \
             --arg password "$QBITTORRENT_PASSWORD" \
-            --arg category "$SONARR_QBIT_CATEGORY" '
+            --arg category "$category" \
+            --argjson tags "$tags" '
 
                 .name = $name
                 | .enable = true
+                | .tags = $tags
 
                 | .fields |= map(
 
@@ -178,78 +189,46 @@ qbittorrent_client_matches() {
                         | .value
                     );
 
-                .name == $desired.name
+                def managed:
+                    {
+                        name: .name,
+                        enable: .enable,
 
-                and
+                        tags:
+                            (
+                                (.tags // [])
+                                | sort
+                            ),
 
-                .enable == true
+                        host:
+                            field_value("host"),
 
-                and
+                        port:
+                            field_value("port"),
 
-                field_value("host")
+                        useSsl:
+                            field_value("useSsl"),
+
+                        urlBase:
+                            field_value("urlBase"),
+
+                        username:
+                            field_value("username"),
+
+                        tvCategory:
+                            field_value("tvCategory")
+                    };
+
+                managed
                 ==
-                (
-                    $desired.fields[]
-                    | select(.name == "host")
-                    | .value
-                )
-
-                and
-
-                field_value("port")
-                ==
-                (
-                    $desired.fields[]
-                    | select(.name == "port")
-                    | .value
-                )
-
-                and
-
-                field_value("useSsl")
-                ==
-                (
-                    $desired.fields[]
-                    | select(.name == "useSsl")
-                    | .value
-                )
-
-                and
-
-                field_value("urlBase")
-                ==
-                (
-                    $desired.fields[]
-                    | select(.name == "urlBase")
-                    | .value
-                )
-
-                and
-
-                field_value("username")
-                ==
-                (
-                    $desired.fields[]
-                    | select(.name == "username")
-                    | .value
-                )
-
-                and
-
-                field_value("tvCategory")
-                ==
-                (
-                    $desired.fields[]
-                    | select(.name == "tvCategory")
-                    | .value
-                )
+                ($desired | managed)
             ' \
         >/dev/null
 }
 
 
 # ------------------------------------------------------------------------------
-# Test qBittorrent connection through Sonarr
+# Test connection
 # ------------------------------------------------------------------------------
 
 test_qbittorrent_client() {
@@ -272,18 +251,14 @@ test_qbittorrent_client() {
             || true
     )"
 
-
     if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
         rm -f "$response_file"
 
-        info "Sonarr successfully connected to qBittorrent."
         return 0
     fi
 
-
     warn "Sonarr could not validate the qBittorrent connection."
     warn "HTTP status: $status"
-
 
     if [[ -s "$response_file" ]]; then
         warn "Sonarr response:"
@@ -303,7 +278,6 @@ test_qbittorrent_client() {
             cat "$response_file" >&2
     fi
 
-
     rm -f "$response_file"
 
     return 1
@@ -311,123 +285,148 @@ test_qbittorrent_client() {
 
 
 # ------------------------------------------------------------------------------
-# Create/update qBittorrent download client
+# Ensure one managed qBittorrent client
 # ------------------------------------------------------------------------------
 
-configure_qbittorrent_download_client() {
-    printf '\n'
-    printf '============================================================\n'
-    printf 'SONARR QBITTORRENT DOWNLOAD CLIENT\n'
-    printf '============================================================\n'
+ensure_qbittorrent_client() {
+    local schema="$1"
+    local name="$2"
+    local category="$3"
+    local tags="$4"
 
-    local schema
     local existing
     local desired
     local client_id
 
-
-    schema="$(
-        get_qbittorrent_schema
-    )"
-
-
-    [[ -n "$schema" ]] ||
-        fatal "Could not find the qBittorrent download-client schema in Sonarr."
-
-
-    validate_qbittorrent_schema "$schema"
-
-
     existing="$(
-        get_existing_qbittorrent_client
+        get_qbittorrent_client_by_name "$name"
     )"
-
 
     # --------------------------------------------------------------------------
-    # Existing qBittorrent client
+    # Existing client
     # --------------------------------------------------------------------------
 
     if [[ -n "$existing" ]]; then
 
-        info "Existing qBittorrent download client found."
-
         desired="$(
-            build_qbittorrent_payload "$existing"
+            build_qbittorrent_payload \
+                "$existing" \
+                "$name" \
+                "$category" \
+                "$tags"
         )"
-
 
         if qbittorrent_client_matches \
             "$existing" \
             "$desired"
         then
-
-            info "qBittorrent download client already matches desired configuration."
+            info "$name already matches desired configuration."
 
             if ! test_qbittorrent_client "$desired"; then
-                fatal "Existing Sonarr qBittorrent configuration could not connect."
+                fatal "$name exists but failed its connection test."
             fi
 
             return
         fi
 
-
-        info "Testing updated qBittorrent configuration..."
+        info "Testing updated configuration for $name..."
 
         if ! test_qbittorrent_client "$desired"; then
-            fatal "Sonarr cannot connect to qBittorrent with the desired settings."
+            fatal "$name could not connect using the desired settings."
         fi
-
 
         client_id="$(
             printf '%s' "$existing" |
                 jq -r '.id'
         )"
 
-
         [[ "$client_id" =~ ^[0-9]+$ ]] ||
-            fatal "Could not determine existing qBittorrent download-client ID."
+            fatal "Could not determine download-client ID for $name."
 
-
-        info "Updating existing qBittorrent download client..."
+        info "Updating $name..."
 
         sonarr_put \
             "/api/v3/downloadclient/$client_id" \
             "$desired" \
             >/dev/null
 
-        info "qBittorrent download client updated."
+        info "$name updated."
 
         return
     fi
 
-
     # --------------------------------------------------------------------------
-    # New qBittorrent client
+    # New client
     # --------------------------------------------------------------------------
-
-    info "No qBittorrent download client exists in Sonarr."
-
 
     desired="$(
-        build_qbittorrent_payload "$schema"
+        build_qbittorrent_payload \
+            "$schema" \
+            "$name" \
+            "$category" \
+            "$tags"
     )"
 
-
-    info "Testing qBittorrent connection..."
+    info "Testing new configuration for $name..."
 
     if ! test_qbittorrent_client "$desired"; then
-        fatal "Sonarr cannot connect to qBittorrent."
+        fatal "$name could not connect to qBittorrent."
     fi
 
-
-    info "Creating qBittorrent download client..."
+    info "Creating $name..."
 
     sonarr_post \
         '/api/v3/downloadclient' \
         "$desired" \
         >/dev/null
 
-    info "qBittorrent download client created."
+    info "$name created."
+}
+
+
+# ------------------------------------------------------------------------------
+# Configure qBittorrent clients
+# ------------------------------------------------------------------------------
+
+configure_qbittorrent_download_clients() {
+    local anime_tag_id="$1"
+
+    local schema
+    local anime_tags
+
+    [[ "$anime_tag_id" =~ ^[0-9]+$ ]] ||
+        fatal "Anime routing tag ID was not provided to download-client configuration."
+
+    printf '\n'
+    printf '============================================================\n'
+    printf 'SONARR QBITTORRENT DOWNLOAD CLIENTS\n'
+    printf '============================================================\n'
+
+    schema="$(get_qbittorrent_schema)"
+
+    [[ -n "$schema" ]] ||
+        fatal "Could not find the qBittorrent download-client schema in Sonarr."
+
+    validate_qbittorrent_schema "$schema"
+
+    anime_tags="$(
+        jq -cn \
+            --argjson tag_id "$anime_tag_id" '
+                [$tag_id]
+            '
+    )"
+
+    ensure_qbittorrent_client \
+        "$schema" \
+        "$SONARR_QBIT_TV_NAME" \
+        "$SONARR_QBIT_TV_CATEGORY" \
+        '[]'
+
+    ensure_qbittorrent_client \
+        "$schema" \
+        "$SONARR_QBIT_ANIME_NAME" \
+        "$SONARR_QBIT_ANIME_CATEGORY" \
+        "$anime_tags"
 }
 
 
@@ -435,44 +434,39 @@ configure_qbittorrent_download_client() {
 # Verification
 # ------------------------------------------------------------------------------
 
-verify_qbittorrent_download_client() {
-    printf '\n'
-    printf '============================================================\n'
-    printf 'SONARR QBITTORRENT VERIFICATION\n'
-    printf '============================================================\n'
+verify_qbittorrent_client() {
+    local name="$1"
+    local category="$2"
+    local tags="$3"
 
     local existing
     local desired
 
-
     existing="$(
-        get_existing_qbittorrent_client
+        get_qbittorrent_client_by_name "$name"
     )"
-
 
     [[ -n "$existing" ]] ||
-        fatal "qBittorrent download client is missing from Sonarr."
-
+        fatal "$name is missing from Sonarr."
 
     desired="$(
-        build_qbittorrent_payload "$existing"
+        build_qbittorrent_payload \
+            "$existing" \
+            "$name" \
+            "$category" \
+            "$tags"
     )"
-
 
     if ! qbittorrent_client_matches \
         "$existing" \
         "$desired"
     then
-        fatal "qBittorrent download client does not match desired configuration."
+        fatal "$name does not match desired configuration."
     fi
-
 
     if ! test_qbittorrent_client "$desired"; then
-        fatal "qBittorrent download client exists but failed its connection test."
+        fatal "$name exists but failed its connection test."
     fi
-
-
-    printf '\n'
 
     printf '%s' "$existing" |
         jq -r '
@@ -488,10 +482,44 @@ verify_qbittorrent_download_client() {
             "    Enabled:  \(.enable)",
             "    Host:     \(field_value("host"))",
             "    Port:     \(field_value("port"))",
-            "    Category: \(field_value("tvCategory"))"
+            "    Category: \(field_value("tvCategory"))",
+            "    Tags:     \((.tags // []) | join(", "))"
         '
 
     printf '\n'
+}
 
-    info "Sonarr qBittorrent download client verified."
+
+verify_qbittorrent_download_clients() {
+    local anime_tag_id="$1"
+
+    local anime_tags
+
+    [[ "$anime_tag_id" =~ ^[0-9]+$ ]] ||
+        fatal "Anime routing tag ID was not provided to verification."
+
+    anime_tags="$(
+        jq -cn \
+            --argjson tag_id "$anime_tag_id" '
+                [$tag_id]
+            '
+    )"
+
+    printf '\n'
+    printf '============================================================\n'
+    printf 'SONARR QBITTORRENT VERIFICATION\n'
+    printf '============================================================\n'
+    printf '\n'
+
+    verify_qbittorrent_client \
+        "$SONARR_QBIT_TV_NAME" \
+        "$SONARR_QBIT_TV_CATEGORY" \
+        '[]'
+
+    verify_qbittorrent_client \
+        "$SONARR_QBIT_ANIME_NAME" \
+        "$SONARR_QBIT_ANIME_CATEGORY" \
+        "$anime_tags"
+
+    info "Sonarr qBittorrent download clients verified."
 }

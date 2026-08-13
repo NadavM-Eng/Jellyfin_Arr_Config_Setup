@@ -360,6 +360,23 @@ source "$PROFILE_BOOTSTRAP"
 configure_quality_profiles
 verify_quality_profiles
 
+# Anime routing
+printf '\n'
+printf '============================================================\n'
+printf 'SONARR QUICK CONFIGURATION - ANIME ROUTING\n'
+printf '============================================================\n'
+
+ROUTING_BOOTSTRAP="$PROJECT_ROOT/bootstrap/sonarr/routing.sh"
+
+[[ -f "$ROUTING_BOOTSTRAP" ]] ||
+    fatal "Missing Sonarr routing bootstrap: $ROUTING_BOOTSTRAP"
+
+# shellcheck disable=SC1090
+source "$ROUTING_BOOTSTRAP"
+
+configure_anime_routing
+verify_anime_routing
+
 # Stage 4B
 printf '\n'
 printf '============================================================\n'
@@ -374,8 +391,8 @@ DOWNLOAD_CLIENT_BOOTSTRAP="$PROJECT_ROOT/bootstrap/sonarr/download-clients.sh"
 # shellcheck disable=SC1090
 source "$DOWNLOAD_CLIENT_BOOTSTRAP"
 
-configure_qbittorrent_download_client
-verify_qbittorrent_download_client
+configure_qbittorrent_download_clients "$SONARR_ANIME_TAG_ID"
+verify_qbittorrent_download_clients "$SONARR_ANIME_TAG_ID"
 
 printf '\n'
 printf '============================================================\n'
