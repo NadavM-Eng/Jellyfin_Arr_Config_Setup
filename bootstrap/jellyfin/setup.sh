@@ -889,6 +889,20 @@ verify_libraries
 configure_admin_permissions
 verify_admin_permissions
 
+# ------------------------------------------------------------------------------
+# Stage 4 - Plugins
+# ------------------------------------------------------------------------------
+
+PLUGIN_BOOTSTRAP="$PROJECT_ROOT/bootstrap/jellyfin/plugins.sh"
+
+[[ -f "$PLUGIN_BOOTSTRAP" ]] ||
+    fatal "Missing Jellyfin plugin bootstrap: $PLUGIN_BOOTSTRAP"
+
+# shellcheck disable=SC1090
+source "$PLUGIN_BOOTSTRAP"
+
+configure_jellyfin_plugins
+
 
 printf '\n'
 printf '============================================================\n'

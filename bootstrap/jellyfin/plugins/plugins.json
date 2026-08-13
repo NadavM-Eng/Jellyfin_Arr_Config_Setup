@@ -1,0 +1,14 @@
+{
+  "plugins": [
+    {
+      "name": "Jellyfin Enhanced",
+      "repositoryName": "Jellyfin Enhanced",
+      "repositoryUrl": "https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json"
+    },
+    {
+      "name": "Intro Skipper",
+      "repositoryName": "Intro Skipper",
+      "repositoryUrl": "https://intro-skipper.org/manifest.json"
+    }
+  ]
+}
