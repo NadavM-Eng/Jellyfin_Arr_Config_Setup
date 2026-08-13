@@ -24,7 +24,9 @@ jq -e '
   (.id | type == "string" and length > 0) and
   (.name | type == "string" and length > 0) and
   (.services | type == "array") and
-  (.setups | type == "array")
+  (.setups | type == "array") and
+  ((.plugins // {}) | type == "object") and
+  all((.plugins // {})[]; type == "array")
 ' "$profile_file" >/dev/null || fail "Profile is not valid JSON: $profile_file"
 
 declare -A service_files=()
@@ -32,6 +34,8 @@ declare -A service_names=()
 declare -A selected_services=()
 declare -A selected_setups=()
 declare -A completed_setups=()
+declare -A selected_plugins=()
+declare -A plugin_names=()
 
 shopt -s nullglob
 definition_files=("$SERVICES_DIR"/*.json)
@@ -71,6 +75,48 @@ for service_id in "${profile_setups[@]}"; do
   [[ -n "${selected_services[$service_id]+x}" ]] || fail "Setup service is not selected: $service_id"
   [[ -z "${selected_setups[$service_id]+x}" ]] || fail "Setup is selected twice: $service_id"
   selected_setups[$service_id]=1
+done
+
+mapfile -t plugin_owners < <(jq -r '(.plugins // {}) | keys[]' "$profile_file")
+
+for service_id in "${plugin_owners[@]}"; do
+  [[ -n "${selected_services[$service_id]+x}" ]] ||
+    fail "Plugins belong to an unselected service: $service_id"
+
+  [[ -n "${selected_setups[$service_id]+x}" ]] ||
+    fail "Plugins require the service setup: $service_id"
+
+  definition_file="${service_files[$service_id]}"
+  plugins_directory="$(jq -r '.pluginsDirectory // empty' "$definition_file")"
+
+  [[ -n "$plugins_directory" ]] ||
+    fail "$service_id does not support plugin choices."
+
+  mapfile -t plugin_ids < <(
+    jq -r --arg service_id "$service_id" '.plugins[$service_id][]' "$profile_file"
+  )
+
+  for plugin_id in "${plugin_ids[@]}"; do
+    plugin_key="$service_id:$plugin_id"
+    [[ -z "${selected_plugins[$plugin_key]+x}" ]] ||
+      fail "Plugin is selected twice: $service_id/$plugin_id"
+
+    selected_plugins[$plugin_key]=1
+    plugin_file="$PROJECT_ROOT/$plugins_directory/$plugin_id/plugin.json"
+
+    [[ -f "$plugin_file" ]] ||
+      fail "Unknown plugin: $service_id/$plugin_id"
+
+    jq -e --arg plugin_id "$plugin_id" '
+      .id == $plugin_id and
+      (.name | type == "string" and length > 0) and
+      (.repositoryName | type == "string" and length > 0) and
+      (.repositoryUrl | type == "string" and length > 0)
+    ' "$plugin_file" >/dev/null ||
+      fail "Plugin file is not valid: $plugin_file"
+
+    plugin_names[$plugin_key]="$(jq -r '.name' "$plugin_file")"
+  done
 done
 
 for service_id in "${profile_services[@]}"; do
@@ -119,6 +165,30 @@ else
   for index in "${!profile_setups[@]}"; do
     service_id="${profile_setups[$index]}"
     printf '  %d. %s (%s)\n' "$((index + 1))" "${service_names[$service_id]}" "$service_id"
+  done
+fi
+
+printf '\nPlugins:\n'
+if ((${#plugin_owners[@]} == 0)); then
+  printf '  None\n'
+else
+  for service_id in "${plugin_owners[@]}"; do
+    mapfile -t plugin_ids < <(
+      jq -r --arg service_id "$service_id" '.plugins[$service_id][]' "$profile_file"
+    )
+
+    if ((${#plugin_ids[@]} == 0)); then
+      printf '  %s: None\n' "${service_names[$service_id]}"
+      continue
+    fi
+
+    for plugin_id in "${plugin_ids[@]}"; do
+      plugin_key="$service_id:$plugin_id"
+      printf '  - %s: %s (%s)\n' \
+        "${service_names[$service_id]}" \
+        "${plugin_names[$plugin_key]}" \
+        "$plugin_id"
+    done
   done
 fi
 

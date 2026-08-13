@@ -93,7 +93,23 @@ for service_id in "${selected_setups[@]}"; do
   setup_script="$(jq -r '.setup.linuxScript' "$definition_file")"
 
   info "Setting up $service_id..."
-  bash "$PROJECT_ROOT/$setup_script"
+
+  if jq -e --arg service_id "$service_id" '
+    (.plugins // {}) | has($service_id)
+  ' "$profile_file" >/dev/null; then
+    plugin_ids="$(
+      jq -r --arg service_id "$service_id" '
+        .plugins[$service_id] | join(",")
+      ' "$profile_file"
+    )"
+
+    MASTERBUILDER_PLUGINS_SELECTED=true \
+    MASTERBUILDER_PLUGIN_IDS="$plugin_ids" \
+      bash "$PROJECT_ROOT/$setup_script"
+  else
+    bash "$PROJECT_ROOT/$setup_script"
+  fi
+
   info "$service_id setup completed."
 done
 
