@@ -25,6 +25,9 @@ Before making changes:
 4. Read the owning service's complete bootstrap and any files it sources.
 5. Check callers and downstream consumers before changing a shared variable,
    JSON field, function, path, service name, or execution order.
+6. For installer architecture, platform, Quick/Custom, plugin orchestration, or
+   GUI work, read `docs/architecture-roadmap.md` and update its task state when
+   a milestone changes.
 
 Do not implement from assumptions when the current source or upstream API can
 answer the question.
