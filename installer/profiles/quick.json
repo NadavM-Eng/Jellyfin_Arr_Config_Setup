@@ -22,5 +22,11 @@
     "bazarr",
     "jellyfin",
     "seerr"
-  ]
+  ],
+  "plugins": {
+    "jellyfin": [
+      "enhanced",
+      "intro-skipper"
+    ]
+  }
 }

@@ -10,6 +10,7 @@
   "needs": [
     "media-network"
   ],
+  "pluginsDirectory": "bootstrap/jellyfin/plugins",
   "setup": {
     "linuxScript": "bootstrap/jellyfin/setup.sh",
     "needsRunning": [],
