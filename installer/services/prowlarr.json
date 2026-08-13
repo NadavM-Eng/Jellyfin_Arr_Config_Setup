@@ -1,0 +1,22 @@
+{
+  "id": "prowlarr",
+  "name": "Prowlarr",
+  "composeFiles": [
+    "compose/media-management/prowlarr.yml"
+  ],
+  "dockerServices": [
+    "prowlarr"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": {
+    "linuxScript": "bootstrap/prowlarr/setup.sh",
+    "needsRunning": [
+      "sonarr",
+      "radarr",
+      "trawl"
+    ],
+    "runsAfterSetup": []
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "sonarr",
+  "name": "Sonarr",
+  "composeFiles": [
+    "compose/media-management/sonarr.yml"
+  ],
+  "dockerServices": [
+    "sonarr"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": {
+    "linuxScript": "bootstrap/sonarr/setup.sh",
+    "needsRunning": [
+      "qbittorrent"
+    ],
+    "runsAfterSetup": [
+      "qbittorrent"
+    ]
+  }
+}

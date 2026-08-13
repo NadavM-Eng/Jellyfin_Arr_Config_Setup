@@ -1,17 +1,17 @@
 {
-  "id": "jellyfin",
-  "name": "Jellyfin",
+  "id": "qbittorrent",
+  "name": "qBittorrent",
   "composeFiles": [
-    "compose/media-management/jellyfin.yml"
+    "compose/downloads/qbittorrent.yml"
   ],
   "dockerServices": [
-    "jellyfin"
+    "qbittorrent"
   ],
   "needs": [
     "media-network"
   ],
   "setup": {
-    "linuxScript": "bootstrap/jellyfin/setup.sh",
+    "linuxScript": "bootstrap/qbittorrent/setup.sh",
     "needsRunning": [],
     "runsAfterSetup": []
   }

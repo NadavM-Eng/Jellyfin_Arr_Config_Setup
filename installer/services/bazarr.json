@@ -1,0 +1,24 @@
+{
+  "id": "bazarr",
+  "name": "Bazarr",
+  "composeFiles": [
+    "compose/media-management/bazarr.yml"
+  ],
+  "dockerServices": [
+    "bazarr"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": {
+    "linuxScript": "bootstrap/bazarr/setup.sh",
+    "needsRunning": [
+      "sonarr",
+      "radarr"
+    ],
+    "runsAfterSetup": [
+      "sonarr",
+      "radarr"
+    ]
+  }
+}

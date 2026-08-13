@@ -1,0 +1,22 @@
+{
+  "id": "radarr",
+  "name": "Radarr",
+  "composeFiles": [
+    "compose/media-management/radarr.yml"
+  ],
+  "dockerServices": [
+    "radarr"
+  ],
+  "needs": [
+    "media-network"
+  ],
+  "setup": {
+    "linuxScript": "bootstrap/radarr/setup.sh",
+    "needsRunning": [
+      "qbittorrent"
+    ],
+    "runsAfterSetup": [
+      "qbittorrent"
+    ]
+  }
+}
