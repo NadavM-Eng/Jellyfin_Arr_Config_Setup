@@ -263,6 +263,28 @@ unless removal is explicitly requested and its scope is verified.
   workflow changes.
 
 
+## Additive migration policy
+
+Architectural migrations are additive until the replacement has proven parity.
+The current working installer remains available while a new planner, executor,
+adapter, or interface is introduced beside it.
+
+- Do not remove, rename, or disable a working entry point, manifest, bootstrap,
+  definition, or supported workflow without the user's explicit approval.
+- Add the smallest new boundary first, validate it, and move one behavior at a
+  time. Do not switch the entire installer to an unvalidated architecture.
+- Before routing execution through a new component, prove that its dry-run or
+  generated plan matches the current behavior for the same selection.
+- Keep compatibility paths until the user has confirmed the replacement in the
+  intended environment.
+- Mark temporary compatibility code and its removal criteria. Additive work is
+  not permission to leave two permanent implementations of the same rule.
+- Prefer adding definitions, selections, and adapters over copying a complete
+  installer for each operating system or installation mode.
+- Deprecation and cleanup are separate, explicitly approved tasks after parity;
+  they are never hidden inside a feature or refactor commit.
+
+
 ## Commit policy
 
 Review recent commit history before composing every commit message. Match the
@@ -307,6 +329,31 @@ Before committing:
 6. Write a subject beginning with the correct required word.
 
 Never rewrite published history or force-push unless the user explicitly asks.
+
+
+## Mandatory user validation checkpoints
+
+The live Linux installation environment and the user's Windows environment are
+authoritative for runtime behavior. Local static checks do not replace those
+tests.
+
+For every new or changed setup script, bootstrap, migration, or executable
+orchestration path:
+
+1. Make one small runnable change.
+2. Run all safe local static and dry-run validation available.
+3. Commit the focused change using the required commit prefix.
+4. Stop before starting the next dependent runtime change.
+5. Give the user the exact command to run, the intended environment, the
+   expected result, and the output or state to report back.
+6. Wait for the user's result. If it fails, diagnose it and create a focused
+   `fixed` commit before continuing.
+
+Do not batch several untested runtime migrations into one validation request.
+Do not use `finished` for a runtime feature until the user confirms the relevant
+end-to-end outcome. Documentation-only and non-executable planning changes do
+not require a live setup run, but their diffs and structure must still be
+validated locally.
 
 
 ## Minimum validation
