@@ -33,6 +33,21 @@ Do not implement from assumptions when the current source or upstream API can
 answer the question.
 
 
+## Use plain language
+
+Write for a person who understands the goal but may not know software design
+terms.
+
+- Use short, direct sentences.
+- Say what a task actually does. For example, write "list what the installer
+  starts and checks" instead of "capture a baseline matrix."
+- Explain a technical term the first time it is needed.
+- Prefer concrete file names and examples over abstract labels.
+- Keep each table cell focused on one idea.
+- Technical names are still correct in code, schemas, and commands, but the
+  surrounding explanation must remain easy to understand.
+
+
 ## Current repository structure
 
 ```text

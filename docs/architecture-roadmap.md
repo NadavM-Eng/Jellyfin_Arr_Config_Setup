@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This document is the durable task map for turning MasterBuilder's current
-Linux Quick installer into one modular orchestration system that can support:
+This document lists the work needed to turn MasterBuilder's current Linux Quick
+installer into one shared installer that can support:
 
 - the existing preconfigured Quick installation;
 - a selective Custom installation;
@@ -28,7 +28,7 @@ The work is being developed on `architecture/shared-installer-engine`.
 | When can runtime work continue? | Only after the user runs each new or changed executable slice and reports the result. | The Linux VM and Windows machine are the authoritative environments. |
 
 
-## Target flow
+## How it should work
 
 ```mermaid
 flowchart LR
@@ -48,11 +48,11 @@ flowchart LR
 ```
 
 Quick, Custom, and the GUI must never contain separate copies of installation
-rules. They produce the same versioned installation plan and consume the same
-result contract.
+rules. Each one makes the same kind of install plan. The same code then runs
+that plan and reports what happened.
 
 
-## Quick and Custom are selection strategies
+## Quick and Custom only choose what to install
 
 | Concern | Quick | Custom | Shared after selection |
 |---|---|---|---|
@@ -68,7 +68,7 @@ exists, the executor should not need to know whether it came from Quick, Custom,
 the command line, or the GUI.
 
 
-## Shared versus platform-specific responsibilities
+## What Linux and Windows share
 
 | Responsibility | Shared | Linux implementation | Windows implementation |
 |---|---:|---|---|
@@ -139,7 +139,7 @@ Engine; Core never depends on the GUI or on Windows-only APIs. A Linux .NET
 adapter is optional later, not a requirement for starting the shared contract.
 
 
-## Current code reuse inventory
+## What current code can be reused
 
 | Current artifact | Reuse classification | Intended boundary |
 |---|---|---|
@@ -165,7 +165,7 @@ should not be presented as a cross-platform library merely because PowerShell
 or .NET could launch Bash.
 
 
-## Component and plan bricks
+## Small parts the installer needs
 
 The exact schema will be designed and reviewed before implementation, but each
 registered component needs enough information to answer these questions:
@@ -215,45 +215,45 @@ is more important than the exact directory spelling:
   restarts, then runs post-restart configuration in dependency order.
 
 
-## Work table
+## Task table
 
-Status values are `complete`, `next`, `planned`, `blocked by user test`, and
-`approval required`. Every row that changes runtime behavior ends at a STOP
-checkpoint before its dependent row begins.
+The status tells us whether a task is done, next, planned, waiting for your
+test, or waiting for your approval. Every task that changes a running installer
+must stop for your test before work that depends on it begins.
 
-| ID | Status | Additive task and outcome | Main boundary | Required validation / STOP gate | Commit checkpoint |
+| ID | Status | What we will do | Part of the project | Check before moving on | Commit |
 |---|---|---|---|---|---|
 | MB-000 | complete | Create `architecture/shared-installer-engine`. | Git isolation | Confirm clean branch based on current `main`. | No code commit. |
-| MB-001 | complete | Record additive migration and user-test rules in `AGENTS.md`. | Governance | Diff and instruction review; no runtime test. | `modified AGENTS.md with additive migration and validation gates` |
-| MB-002 | complete | Add this roadmap and link it from `AGENTS.md`. | Durable architecture memory | Markdown structure, links, and repository diff; no runtime test. | `added cross-platform installer architecture roadmap` |
-| MB-010 | next | Capture a baseline matrix of current services, Compose files, environment keys, directories, bootstraps, plugins, and verification. | Inventory | Compare the document with `quick-stack.txt`, Compose config, and all current bootstrap entry points. | `added current installer capability and dependency baseline` |
-| MB-011 | planned | Record the current lifecycle and hard-coded dependency order, including known optional and hard integrations. | Lifecycle | Review with the user before new container/plugin/hook/bootstrap work. | `added installer lifecycle and dependency map` |
-| MB-012 | planned | Define the vocabulary and responsibility contract: component, capability, selection, profile, plan, step, adapter, verifier, and result. | SOLID interfaces | Architecture review; prove every term has one responsibility. | `added orchestration responsibility contracts` |
-| MB-020 | planned | Add versioned JSON schemas for component definitions, profiles, and install plans. No executor consumes them yet. | Shared contracts | Parse schemas and validate representative valid/invalid fixtures locally. | `added orchestration schemas and validation fixtures` |
-| MB-021 | planned | Add one definition per currently supported component using only facts already in the repository. | Component catalog | Validate all files; compare Compose services, paths, ports, and prerequisites with the baseline. | `added existing stack component definitions` |
-| MB-022 | planned | Add a Quick profile that explicitly selects the current full stack and current managed configuration. | Selection | Compare its selection with `quick-stack.txt` and `QUICK_CONFIG_*`; no runtime change. | `added preconfigured Quick installation profile` |
-| MB-023 | planned | Add a read-only planner/validator that turns Quick or an explicit selection into a plan. The current installer remains default. | Planner | Local fixture tests, dependency/order failures, and secret-redaction test. Then STOP: user runs the dry-run on the Linux VM and returns the plan. | `added shared installation plan validator` |
-| MB-024 | blocked by user test | Compare the generated Quick plan with the current installer's exact Compose and bootstrap behavior. | Parity proof | STOP until the user accepts the Linux VM dry-run and discrepancies are resolved. | `fixed ...` commits as needed, then `finished Quick plan parity` |
-| MB-030 | planned | Extract output, environment access, Compose invocation, storage creation, and verification from `linux-setup.sh` one small library at a time. | Linux adapter | Static checks for each extraction. STOP after each runnable extraction for the user's Quick rerun or focused verify command. | One `modified ...` commit per focused extraction. |
-| MB-031 | planned | Add an opt-in Linux plan executor that uses the extracted libraries and existing service bootstraps. Keep `quick` unchanged. | Headless executor | Dry-run first. STOP: user runs opt-in Quick on the Linux VM, then reruns it to prove idempotency. | `added opt-in Linux plan executor` plus `fixed ...` as needed. |
-| MB-032 | approval required | Route Linux Quick through the shared planner/executor while retaining a documented compatibility path. | Quick migration | STOP: full fresh-state and existing-state Linux tests; user explicitly approves the switch. | `modified Linux Quick Setup to use the shared engine` |
-| MB-040 | planned | Add a Custom CLI selector that only produces the same plan format; do not create another executor. | Custom selection | Validate empty, small, and full selections plus dependency explanations. STOP: user reviews the plan UX before execution is enabled. | `added Custom installation plan selection` |
-| MB-041 | blocked by user test | Allow Custom plans to execute through the proven engine. | Shared execution | STOP: user tests several supported subsets and reruns on the Linux VM. | `added Custom installation execution` then `finished shared Quick and Custom engine` |
-| MB-050 | planned | Migrate Jellyfin plugins additively from one array file to one definition file per plugin, with a compatibility reader first. | Plugin catalog | Parse every definition and compare the Quick selection. STOP: user runs plugin install and rerun tests. | Separate `added`/`modified` commits; `finished selectable Jellyfin plugin definitions` only after confirmation. |
-| MB-051 | planned | Add plugin lifecycle phases: install selected plugins, batch restart, wait for readiness, configure selected plugins, verify. | Plugin executor | STOP: user verifies unchanged rerun and one intentionally deselected plugin. | `modified Jellyfin plugin orchestration with lifecycle phases` |
-| MB-052 | planned | Add Enhanced-owned Seerr configuration with explicit Seerr readiness ordering. | Owner-scoped integration | STOP: user tests Quick with both selected, Custom without Enhanced, and rerun behavior. | `added Enhanced Seerr configuration` then `finished ...` after confirmation. |
-| MB-053 | planned | Use the same requirement model for future Shokofin/Shoko work; do not implement either until selected as a feature task. | Dependency model proof | Schema/plan fixture only at this stage. Runtime validation belongs to the future feature. | Included only if a focused definition change is needed. |
-| MB-060 | planned | Add structured progress and final-result events without removing readable terminal output. | GUI/CLI boundary | Contract tests and secret-redaction checks. STOP: user reviews real Quick output. | `added structured installer progress events` |
-| MB-061 | planned | Add cancellation and resumable/retry semantics only for plan steps that can support them safely. | Execution control | Failure-injection tests; STOP on Linux VM before GUI relies on them. | Focused `added`/`fixed` commits. |
-| MB-070 | planned | Create `MasterBuilder.Core` after the schemas and plan behavior are stable. It loads and validates the same definitions without Windows UI dependencies. | .NET shared core | .NET unit tests must consume the same valid/invalid fixtures as Linux. | `added .NET orchestration core` |
-| MB-071 | planned | Add the Windows platform adapter for Docker Desktop, path resolution, directories, elevation, and protected inputs. | Windows adapter | STOP: user runs read-only diagnostics and dry-run on Windows. | One focused commit per adapter slice. |
-| MB-072 | planned | Add a headless Windows executor for the shared plan before building the GUI. Keep `windows-setup.ps1`. | Windows engine | STOP: user tests Compose validation, start, verify, rerun, and a safe failure on Windows. | `added Windows shared-plan executor` plus fixes. |
-| MB-073 | planned | Build a thin .NET wizard: choose Quick/Custom, collect necessary values, review plan, confirm, show progress and recovery guidance. | Windows GUI | STOP at each screen/workflow slice for user UX approval; then full Windows end-to-end test. | Multiple focused `added`/`modified` commits; `finished Windows guided installer` after confirmation. |
-| MB-080 | planned | Maintain a Linux/Windows and Quick/Custom parity matrix for every supported capability. | Release verification | User-confirmed end-to-end evidence for supported cells. | `added installer parity test matrix` and focused fixes. |
-| MB-090 | approval required | Deprecate or remove compatibility files only after parity, documentation, and explicit user approval. | Cleanup | Confirm replacement, migration path, rollback, and release boundary. | Separate `modified` or `finished` commit; never hidden in another change. |
+| MB-001 | complete | Put the safe-change and user-test rules in `AGENTS.md`. | Project rules | Review the change; no setup test is needed. | `modified AGENTS.md with additive migration and validation gates` |
+| MB-002 | complete | Add this task list and link it from `AGENTS.md`. | Project documents | Check the document and link; no setup test is needed. | `added cross-platform installer architecture roadmap` |
+| MB-010 | next | Write down exactly what the installer starts, configures, and checks today. | Current installer | Compare the document with `quick-stack.txt`, the Compose files, and every setup script. | `added current installer map` |
+| MB-011 | planned | Write down the current order: what runs first, what waits, and which parts need other parts. | Run order | Review it with the user before adding more containers, plugins, hooks, or setup scripts. | `added current installer run order` |
+| MB-012 | planned | Agree on simple names for each part and say which part owns each job. | Code responsibilities | Check that every part has one clear job. | `added installer part and ownership rules` |
+| MB-020 | planned | Add JSON rules that describe components, Quick choices, and install plans. Nothing will run them yet. | Shared data files | Check good examples and make sure bad examples fail. | `added installer JSON rules and examples` |
+| MB-021 | planned | Add one data file for each service already supported. | Service list | Compare every file with the current Compose files, paths, ports, and needs. | `added current service definitions` |
+| MB-022 | planned | Add a Quick file that selects everything the current Quick install uses. | Quick choices | Compare it with `quick-stack.txt` and `QUICK_CONFIG_*`; no setup behavior changes. | `added preconfigured Quick installation profile` |
+| MB-023 | planned | Add a command that only shows and checks an install plan. The current installer stays unchanged. | Plan checker | Test good and bad plans and make sure secrets are hidden. Then STOP: the user runs it on the Linux VM. | `added shared installation plan checker` |
+| MB-024 | waiting for user test | Make sure the new Quick plan matches everything the current Quick installer does. | Same-results check | STOP until the user accepts the Linux VM result and every difference is fixed. | `fixed ...` as needed, then `finished Quick plan matching` |
+| MB-030 | planned | Move small reusable jobs out of `linux-setup.sh`, one at a time. This includes messages, settings, Compose commands, folders, and checks. | Linux helper code | Check each move without running it. Then STOP after each working change so the user can rerun Quick or Verify. | One `modified ...` commit for each small move. |
+| MB-031 | planned | Add an optional Linux command that runs a plan using the existing service setup scripts. Keep `quick` unchanged. | Linux plan runner | Show the plan first. Then STOP: the user runs Quick with the new option and runs it again to check that it is safe. | `added optional Linux plan runner` plus `fixed ...` as needed. |
+| MB-032 | waiting for approval | Make Linux Quick use the shared plan runner while keeping the old path available. | Quick changeover | STOP: test a new install and a rerun on Linux; the user must approve the switch. | `modified Linux Quick Setup to use the shared engine` |
+| MB-040 | planned | Add a Custom command that lets the user choose parts and makes the same kind of plan as Quick. | Custom choices | Check empty, small, and full choices. Explain missing required parts. STOP: the user reviews it before Custom can install anything. | `added Custom installation choices` |
+| MB-041 | waiting for user test | Let Custom plans use the same tested runner as Quick. | Shared runner | STOP: the user tests several choices and reruns them on the Linux VM. | `added Custom installation execution` then `finished shared Quick and Custom engine` |
+| MB-050 | planned | Keep one file for each Jellyfin plugin. First add support for the new files while the old file still works. | Jellyfin plugins | Check every plugin file and the Quick plugin list. STOP: the user installs the plugins and runs the setup again. | Use separate `added` and `modified` commits; use `finished` only after the test. |
+| MB-051 | planned | Install chosen plugins, restart Jellyfin once, wait for it, configure the plugins, and check the result. | Plugin runner | STOP: the user checks a safe rerun and checks that an unchosen plugin is not installed. | `modified Jellyfin plugin setup order` |
+| MB-052 | planned | Put Enhanced's Seerr settings with Enhanced and run them only after Seerr is ready. | Enhanced plugin | STOP: test Quick with both, Custom without Enhanced, and a rerun. | `added Enhanced Seerr configuration`, then `finished ...` after the test. |
+| MB-053 | planned | Make sure the same rules can say that Shokofin needs both Jellyfin and Shoko. Do not install them yet. | Required-parts rules | Check only example plan files now. A future Shokofin task will need a real test. | Commit only if a separate file changes. |
+| MB-060 | planned | Keep normal terminal messages and also report each step in a form a GUI can read. | Progress reports | Check that secrets stay hidden. STOP: the user reviews real Quick output. | `added installer progress reports for the GUI` |
+| MB-061 | planned | Let safe steps stop and retry. Add this only where it cannot damage user data. | Stop and retry | Test planned failures. STOP: test on the Linux VM before the GUI uses it. | Small `added` or `fixed` commits. |
+| MB-070 | planned | Create the .NET code that reads and checks the same plans. It must not contain Windows screen code. | Shared .NET code | Run the same good and bad plan examples used by Linux. | `added shared .NET plan code` |
+| MB-071 | planned | Add Windows code for Docker Desktop, paths, folders, administrator access, and private inputs. | Windows-only code | STOP: the user runs safe checks and shows a plan on Windows. | One commit for each small Windows part. |
+| MB-072 | planned | Add a Windows command that can run the shared plan before building the GUI. Keep `windows-setup.ps1`. | Windows plan runner | STOP: test checking, starting, verifying, rerunning, and one safe failure on Windows. | `added Windows shared-plan runner` plus fixes. |
+| MB-073 | planned | Build a simple .NET wizard for Quick or Custom, needed values, plan review, progress, and help after errors. | Windows GUI | STOP after each screen or small flow for the user's approval, then test the complete Windows install. | Use many small commits; use `finished Windows guided installer` after the final test. |
+| MB-080 | planned | Keep a checklist showing what works on Linux and Windows in Quick and Custom. | Final checks | The user confirms every supported item by running it. | `added Linux and Windows installer checklist` plus focused fixes. |
+| MB-090 | waiting for approval | Remove old files only after the new path does the same job and the user clearly approves removal. | Later cleanup | Check the replacement, move instructions, recovery path, and release point. | Use a separate `modified` or `finished` commit. |
 
 
-## Foundation gate before feature expansion
+## Before adding more features
 
 Do not add another container, plugin, hook, or bootstrap capability until
 MB-010 through MB-024 are accepted. Fixes to existing behavior remain allowed.
@@ -267,7 +267,7 @@ feature, but its dependency shape is used to validate that the architecture is
 capable of representing hard prerequisites.
 
 
-## Validation handoff format
+## What I will ask you to test
 
 At every STOP gate, the agent must provide all of the following and wait for the
 user's result:
@@ -285,7 +285,7 @@ No later dependent runtime task begins until the result is accepted. A failed
 gate produces a focused `fixed` commit and repeats the same gate.
 
 
-## Definition of architectural success
+## How we know the design works
 
 This roadmap succeeds when:
 
