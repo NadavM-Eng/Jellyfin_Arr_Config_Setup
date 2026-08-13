@@ -5,7 +5,7 @@
 # ==============================================================================
 #
 # Responsibilities:
-#   - Read desired plugins from plugins/plugins.json.
+#   - Read one definition file for each selected plugin.
 #   - Ensure required Jellyfin plugin repositories exist and are enabled.
 #   - Install missing plugins.
 #   - Enable disabled plugins.
@@ -16,34 +16,133 @@
 # ==============================================================================
 
 
-PLUGIN_MANIFEST="$PROJECT_ROOT/bootstrap/jellyfin/plugins/plugins.json"
+PLUGIN_DEFINITIONS_DIR="$PROJECT_ROOT/bootstrap/jellyfin/plugins"
+LEGACY_PLUGIN_MANIFEST="$PLUGIN_DEFINITIONS_DIR/plugins.json"
 
 JELLYFIN_PLUGIN_RESTART_REQUIRED=false
+PLUGIN_SOURCE=""
+PLUGIN_DEFINITION_FILES=()
 
 
 # ------------------------------------------------------------------------------
-# Manifest
+# Plugin definitions
 # ------------------------------------------------------------------------------
 
-validate_plugin_manifest() {
-    [[ -f "$PLUGIN_MANIFEST" ]] ||
-        fatal "Missing Jellyfin plugin manifest: $PLUGIN_MANIFEST"
+validate_plugin_definition() {
+    local definition_file="$1"
 
     jq -e '
-        .plugins
+        (.id | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
         and
+        (.name | type == "string" and length > 0)
+        and
+        (.repositoryName | type == "string" and length > 0)
+        and
+        (.repositoryUrl | type == "string" and length > 0)
+    ' "$definition_file" >/dev/null ||
+        fatal "Invalid Jellyfin plugin definition: $definition_file"
+}
+
+
+validate_legacy_plugin_manifest() {
+    jq -e '
         (.plugins | type == "array")
-        and
-        all(
+        and all(
             .plugins[];
             (.name | type == "string" and length > 0)
-            and
-            (.repositoryName | type == "string" and length > 0)
-            and
-            (.repositoryUrl | type == "string" and length > 0)
+            and (.repositoryName | type == "string" and length > 0)
+            and (.repositoryUrl | type == "string" and length > 0)
         )
-    ' "$PLUGIN_MANIFEST" >/dev/null ||
-        fatal "Invalid Jellyfin plugin manifest: $PLUGIN_MANIFEST"
+    ' "$LEGACY_PLUGIN_MANIFEST" >/dev/null ||
+        fatal "Invalid Jellyfin plugin manifest: $LEGACY_PLUGIN_MANIFEST"
+}
+
+
+load_plugin_definitions() {
+    PLUGIN_DEFINITION_FILES=()
+
+    local selection_is_set="${MASTERBUILDER_PLUGINS_SELECTED:-false}"
+    local selected_ids="${MASTERBUILDER_PLUGIN_IDS:-}"
+    local plugin_id
+    local plugin_name
+    local expected_id
+    local definition_file
+    local -A requested_ids_seen=()
+    local -A seen_ids=()
+    local -A seen_names=()
+
+    if [[ "$selection_is_set" == "true" ]]; then
+        if [[ -n "$selected_ids" ]]; then
+            IFS=',' read -r -a requested_ids <<< "$selected_ids"
+
+            for plugin_id in "${requested_ids[@]}"; do
+                [[ "$plugin_id" =~ ^[a-z0-9][a-z0-9-]*$ ]] ||
+                    fatal "Invalid selected Jellyfin plugin ID: $plugin_id"
+
+                [[ -z "${requested_ids_seen[$plugin_id]+x}" ]] ||
+                    fatal "Jellyfin plugin selected twice: $plugin_id"
+
+                requested_ids_seen[$plugin_id]=1
+                definition_file="$PLUGIN_DEFINITIONS_DIR/$plugin_id/plugin.json"
+
+                [[ -f "$definition_file" ]] ||
+                    fatal "Selected Jellyfin plugin definition is missing: $plugin_id"
+
+                PLUGIN_DEFINITION_FILES+=("$definition_file")
+            done
+        fi
+
+        PLUGIN_SOURCE="files"
+    else
+        shopt -s nullglob
+        PLUGIN_DEFINITION_FILES=("$PLUGIN_DEFINITIONS_DIR"/*/plugin.json)
+        shopt -u nullglob
+
+        if ((${#PLUGIN_DEFINITION_FILES[@]} > 0)); then
+            PLUGIN_SOURCE="files"
+        elif [[ -f "$LEGACY_PLUGIN_MANIFEST" ]]; then
+            validate_legacy_plugin_manifest
+            PLUGIN_SOURCE="legacy"
+            return
+        else
+            fatal "No Jellyfin plugin definitions were found."
+        fi
+    fi
+
+    for definition_file in "${PLUGIN_DEFINITION_FILES[@]}"; do
+        validate_plugin_definition "$definition_file"
+
+        plugin_id="$(jq -r '.id' "$definition_file")"
+        plugin_name="$(jq -r '.name' "$definition_file")"
+        expected_id="$(basename -- "$(dirname -- "$definition_file")")"
+
+        [[ "$plugin_id" == "$expected_id" ]] ||
+            fatal "Jellyfin plugin ID does not match its folder: $definition_file"
+
+        [[ -z "${seen_ids[$plugin_id]+x}" ]] ||
+            fatal "Jellyfin plugin ID is used twice: $plugin_id"
+
+        [[ -z "${seen_names[$plugin_name]+x}" ]] ||
+            fatal "Jellyfin plugin name is used twice: $plugin_name"
+
+        seen_ids[$plugin_id]=1
+        seen_names[$plugin_name]=1
+    done
+}
+
+
+plugin_rows() {
+    local definition_file
+
+    if [[ "$PLUGIN_SOURCE" == "legacy" ]]; then
+        jq -r '.plugins[] | [.name, .repositoryName, .repositoryUrl] | @tsv' \
+            "$LEGACY_PLUGIN_MANIFEST"
+        return
+    fi
+
+    for definition_file in "${PLUGIN_DEFINITION_FILES[@]}"; do
+        jq -r '[.name, .repositoryName, .repositoryUrl] | @tsv' "$definition_file"
+    done
 }
 
 
@@ -437,20 +536,11 @@ verify_managed_plugins() {
     printf 'JELLYFIN PLUGIN VERIFICATION\n'
     printf '============================================================\n'
 
-    while IFS=$'\t' read -r name repository_url; do
+    while IFS=$'\t' read -r name _repository_name repository_url; do
 
         verify_plugin "$name"
 
-    done < <(
-        jq -r '
-            .plugins[]
-            | [
-                .name,
-                .repositoryUrl
-            ]
-            | @tsv
-        ' "$PLUGIN_MANIFEST"
-    )
+    done < <(plugin_rows)
 
     info "All managed Jellyfin plugins verified."
 }
@@ -466,7 +556,12 @@ configure_jellyfin_plugins() {
     printf 'JELLYFIN PLUGINS\n'
     printf '============================================================\n'
 
-    validate_plugin_manifest
+    load_plugin_definitions
+
+    if [[ "$PLUGIN_SOURCE" == "files" && ${#PLUGIN_DEFINITION_FILES[@]} -eq 0 ]]; then
+        info "No Jellyfin plugins selected."
+        return
+    fi
 
     while IFS=$'\t' read -r name repository_name repository_url; do
 
@@ -474,34 +569,15 @@ configure_jellyfin_plugins() {
             "$repository_name" \
             "$repository_url"
 
-    done < <(
-        jq -r '
-            .plugins[]
-            | [
-                .name,
-                .repositoryName,
-                .repositoryUrl
-            ]
-            | @tsv
-        ' "$PLUGIN_MANIFEST"
-    )
+    done < <(plugin_rows)
 
-    while IFS=$'\t' read -r name repository_url; do
+    while IFS=$'\t' read -r name _repository_name repository_url; do
 
         ensure_plugin \
             "$name" \
             "$repository_url"
 
-    done < <(
-        jq -r '
-            .plugins[]
-            | [
-                .name,
-                .repositoryUrl
-            ]
-            | @tsv
-        ' "$PLUGIN_MANIFEST"
-    )
+    done < <(plugin_rows)
 
     restart_jellyfin_for_plugins
     verify_managed_plugins
