@@ -359,8 +359,6 @@ configure_sonarr() {
         return
     fi
 
-    info "Adding Sonarr to Prowlarr..."
-
     local payload
 
     payload="$(cat <<JSON
@@ -442,8 +440,6 @@ configure_radarr() {
         info "Radarr already exists in Prowlarr. Skipping."
         return
     fi
-
-    info "Adding Radarr to Prowlarr..."
 
     local payload
 
