@@ -70,12 +70,19 @@ fatal() { printf '[X] %s\n' "$1" >&2; exit 1; }
 # ------------------------------------------------------------------------------
 
 DEPENDENCY_HELPER="$PROJECT_ROOT/lib/linux/dependencies.sh"
+COMPOSE_HELPER="$PROJECT_ROOT/lib/linux/compose.sh"
 
 [[ -f "$DEPENDENCY_HELPER" ]] ||
   fatal "Missing Linux dependency helper: $DEPENDENCY_HELPER"
 
+[[ -f "$COMPOSE_HELPER" ]] ||
+  fatal "Missing Linux Compose helper: $COMPOSE_HELPER"
+
 # shellcheck disable=SC1090
 source "$DEPENDENCY_HELPER"
+
+# shellcheck disable=SC1090
+source "$COMPOSE_HELPER"
 
 # ------------------------------------------------------------------------------
 # Docker checks
@@ -311,15 +318,7 @@ initialize_directories() {
 load_quick_files() {
   [[ -f "$QUICK_MANIFEST" ]] || fatal "Missing quick-stack.txt."
 
-  QUICK_FILES=()
-
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line="${line%$'\r'}"
-    [[ -z "${line//[[:space:]]/}" ]] && continue
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-
-    QUICK_FILES+=("$PROJECT_ROOT/$line")
-  done < "$QUICK_MANIFEST"
+  load_compose_manifest "$PROJECT_ROOT" "$QUICK_MANIFEST" QUICK_FILES
 
   ((${#QUICK_FILES[@]} > 0)) || fatal "quick-stack.txt does not contain any Compose files."
 
@@ -330,15 +329,7 @@ load_quick_files() {
 }
 
 compose_quick() {
-  local command=(docker compose --project-directory "$PROJECT_ROOT" --env-file "$ENV_FILE")
-  local file
-
-  for file in "${QUICK_FILES[@]}"; do
-    command+=( -f "$file" )
-  done
-
-  command+=( "$@" )
-  "${command[@]}"
+  run_compose_files "$PROJECT_ROOT" "$ENV_FILE" QUICK_FILES "$@"
 }
 
 # ------------------------------------------------------------------------------
