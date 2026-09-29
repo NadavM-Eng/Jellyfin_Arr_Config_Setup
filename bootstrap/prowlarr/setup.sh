@@ -334,8 +334,8 @@ application_exists() {
     local implementation="$1"
 
     prowlarr_get "/api/v1/applications" |
-        grep -Eq \
-        "\"implementation\"[[:space:]]*:[[:space:]]*\"${implementation}\""
+        grep -E \
+        "\"implementation\"[[:space:]]*:[[:space:]]*\"${implementation}\"" >/dev/null
 }
 
 
@@ -343,8 +343,8 @@ proxy_exists() {
     local name="$1"
 
     prowlarr_get "/api/v1/indexerproxy" |
-        grep -Eq \
-        "\"name\"[[:space:]]*:[[:space:]]*\"${name}\""
+        grep -E \
+        "\"name\"[[:space:]]*:[[:space:]]*\"${name}\"" >/dev/null
 }
 
 
