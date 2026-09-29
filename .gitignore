@@ -1,5 +1,6 @@
 .env
 runtime/
+MY_SERVER/
 
 *.log
 *.tmp

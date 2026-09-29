@@ -51,6 +51,8 @@ JELLYFIN_USER_ID=""
 # HTTP helpers
 # ------------------------------------------------------------------------------
 
+# Return the response body followed by its HTTP status, as expected by callers.
+# Jellyfin 12 requires the standard authorization header unless legacy auth is enabled.
 jellyfin_status_request() {
     local method="$1"
     local endpoint="$2"
@@ -59,13 +61,18 @@ jellyfin_status_request() {
 
     local args=(
         -sS
+        --connect-timeout 5
+        --max-time 120
         -X "$method"
         -H "Content-Type: application/json"
     )
 
-    if [[ "$auth" == "true" && -n "$JELLYFIN_TOKEN" ]]; then
+    if [[ "$auth" == "true" ]]; then
+        [[ -n "$JELLYFIN_TOKEN" ]] ||
+            fatal "An authenticated Jellyfin request requires an administrator token."
+
         args+=(
-            -H "X-Emby-Token: $JELLYFIN_TOKEN"
+            -H "Authorization: MediaBrowser Client=\"MasterBuilder\", Device=\"Installer\", DeviceId=\"masterbuilder-installer\", Version=\"1.0\", Token=\"$JELLYFIN_TOKEN\""
         )
     fi
 
@@ -78,7 +85,8 @@ jellyfin_status_request() {
     curl \
         "${args[@]}" \
         -w $'\n%{http_code}' \
-        "$JELLYFIN_HOST_URL$endpoint"
+        "$JELLYFIN_HOST_URL$endpoint" ||
+        fatal "Jellyfin request failed: $method $endpoint (connection or timeout)."
 }
 
 
@@ -96,12 +104,12 @@ require_success() {
     local body="${3:-}"
 
     if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
-        warn "$action failed."
-        warn "HTTP status: $status"
+        warn "$action failed." >&2
+        warn "HTTP status: $status" >&2
 
+        # Error bodies may contain credentials; keep diagnostics out of JSON output.
         if [[ -n "$body" ]]; then
-            printf '%s\n' "$body" |
-                sed 's/^/    /' >&2
+            warn "Response body omitted; check the Jellyfin server log." >&2
         fi
 
         fatal "$action failed."
@@ -114,33 +122,35 @@ require_success() {
 # ------------------------------------------------------------------------------
 
 wait_for_jellyfin() {
-    local waited=0
-    local status
+    local deadline=$((SECONDS + 180))
+    local response
 
     info "Waiting for Jellyfin API..."
 
-    while (( waited < 180 )); do
+    while (( SECONDS < deadline )); do
 
-        status="$(
+        if response="$(
             curl \
                 -s \
-                -o /dev/null \
-                -w '%{http_code}' \
-                "$JELLYFIN_HOST_URL/System/Info/Public" \
-                2>/dev/null ||
-                true
-        )"
+                --connect-timeout 3 \
+                --max-time 5 \
+                -w $'\n%{http_code}' \
+                "$JELLYFIN_HOST_URL/health" \
+                2>/dev/null
+        )"; then
+            split_response "$response"
 
-        if [[ "$status" == "200" ]]; then
-            info "Jellyfin API is ready."
-            return
+            # The temporary startup server reports Degraded, not Healthy.
+            if [[ "$HTTP_STATUS" == "200" && "$HTTP_BODY" == "Healthy" ]]; then
+                info "Jellyfin API is ready."
+                return 0
+            fi
         fi
 
         sleep 2
-        ((waited += 2))
     done
 
-    fatal "Jellyfin API did not become ready."
+    fatal "Jellyfin did not become healthy before the startup timeout."
 }
 
 
@@ -166,13 +176,16 @@ authenticate_admin() {
     response="$(
         curl \
             -sS \
+            --connect-timeout 5 \
+            --max-time 30 \
             -X POST \
             -H "Content-Type: application/json" \
             -H 'Authorization: MediaBrowser Client="MasterBuilder", Device="Installer", DeviceId="masterbuilder-installer", Version="1.0"' \
             --data "$payload" \
             -w $'\n%{http_code}' \
             "$JELLYFIN_HOST_URL/Users/AuthenticateByName"
-    )"
+    )" ||
+        fatal "Jellyfin administrator login request failed (connection or timeout)."
 
     split_response "$response"
 
@@ -200,18 +213,33 @@ authenticate_admin() {
 # Detect setup state
 # ------------------------------------------------------------------------------
 
+# Return 0 only for an unfinished wizard; return 1 when setup is complete.
+# A failed request or missing state is an error, not evidence of a fresh server.
 startup_wizard_available() {
     local response
 
     response="$(
         jellyfin_status_request \
             GET \
-            "/Startup/Configuration"
-    )"
+            "/System/Info/Public"
+    )" ||
+        fatal "Could not determine Jellyfin startup state."
 
     split_response "$response"
 
-    [[ "$HTTP_STATUS" == "200" ]]
+    require_success \
+        "$HTTP_STATUS" \
+        "Reading Jellyfin startup state" \
+        "$HTTP_BODY"
+
+    printf '%s' "$HTTP_BODY" |
+        jq -e '(.StartupWizardCompleted | type) == "boolean"' \
+        >/dev/null ||
+        fatal "Jellyfin did not return a valid StartupWizardCompleted flag."
+
+    printf '%s' "$HTTP_BODY" |
+        jq -e '.StartupWizardCompleted == false' \
+        >/dev/null
 }
 
 
@@ -412,6 +440,10 @@ complete_startup() {
         "$HTTP_STATUS" \
         "Completing Jellyfin startup wizard" \
         "$HTTP_BODY"
+
+    if startup_wizard_available; then
+        fatal "Jellyfin accepted startup completion, but the wizard is still unfinished."
+    fi
 
     info "Startup wizard completed."
 }
@@ -848,6 +880,18 @@ if authenticate_admin; then
     info "Administrator authentication succeeded."
 
     verify_admin
+
+    # A previous run may have created the administrator but stopped before completion.
+    # Resume the remaining startup settings without recreating or resetting the user.
+    if startup_wizard_available; then
+        info "Resuming unfinished Jellyfin startup."
+
+        configure_initial_server
+        configure_remote_access
+        complete_startup
+
+        sleep 2
+    fi
 
 else
 

@@ -143,8 +143,8 @@ initialize_env() {
   jellyfin_password="$(generate_secret)"
   qbittorrent_password="$(generate_secret)"
 
-  default_config="$PROJECT_ROOT/runtime/config"
-  default_data="$PROJECT_ROOT/runtime/data"
+  default_config="$PROJECT_ROOT/MY_SERVER/config"
+  default_data="$PROJECT_ROOT/MY_SERVER/data"
 
   printf 'Config root [%s]: ' "$default_config"
   read -r config_root
