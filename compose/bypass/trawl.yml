@@ -1,6 +1,6 @@
 services:
     trawl-redis:
-        image: redis:8.8-alpine
+        image: redis:8.10.2-alpine3.23
         container_name: trawl-redis
 
         volumes:
@@ -12,7 +12,7 @@ services:
           - media_network
           
     trawl:
-        image: ghcr.io/germondai/trawl:latest
+        image: ghcr.io/germondai/trawl:1.7.0
         container_name: trawl
 
         shm_size: 1gb

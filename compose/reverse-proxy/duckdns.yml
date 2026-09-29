@@ -1,6 +1,6 @@
 services:
   duckdns:
-    image: lscr.io/linuxserver/duckdns:latest
+    image: lscr.io/linuxserver/duckdns:ca9e2a14-ls91
     container_name: duckdns
 
     environment:
