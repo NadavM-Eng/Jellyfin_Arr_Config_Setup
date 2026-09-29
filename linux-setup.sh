@@ -553,8 +553,10 @@ validate_quick_stack() {
   info "Compose configuration is valid."
 }
 
+# Uses the existing heading(), info(), warn(), and env_get() helpers.
+# Prints credentials from .env on request; never generates or changes them.
 show_service_links() {
-  heading "SERVICE LINKS"
+  heading "SERVICE LINKS AND LOGIN DETAILS"
 
   local host_ip
 
@@ -566,6 +568,11 @@ show_service_links() {
   local jellyfin_port
   local seerr_port
   local npm_port
+
+  local jellyfin_username
+  local jellyfin_password
+  local qbittorrent_username
+  local qbittorrent_password
 
   host_ip="$(
     hostname -I 2>/dev/null |
@@ -592,20 +599,89 @@ show_service_links() {
   seerr_port="${seerr_port:-5055}"
   npm_port="${npm_port:-81}"
 
+  # Read the existing generated credentials; preserve the configured username.
+  jellyfin_username="$(env_get JELLYFIN_ADMIN_USERNAME)"
+  jellyfin_password="$(env_get JELLYFIN_ADMIN_PASSWORD)"
+  qbittorrent_username="$(env_get QBITTORRENT_USERNAME)"
+  qbittorrent_password="$(env_get QBITTORRENT_PASSWORD)"
+
+  jellyfin_username="${jellyfin_username:-admin}"
+  qbittorrent_username="${qbittorrent_username:-admin}"
+
+  # Do not display an empty value as though it were a valid blank password.
+  jellyfin_password="${jellyfin_password:-[not set in .env]}"
+  qbittorrent_password="${qbittorrent_password:-[not set in .env]}"
+
   printf '\n'
-  printf '  %-22s %s\n' "Sonarr:"       "http://$host_ip:$sonarr_port"
-  printf '  %-22s %s\n' "Radarr:"       "http://$host_ip:$radarr_port"
-  printf '  %-22s %s\n' "Prowlarr:"     "http://$host_ip:$prowlarr_port"
-  printf '  %-22s %s\n' "Bazarr:"       "http://$host_ip:$bazarr_port"
-  printf '  %-22s %s\n' "qBittorrent:"  "http://$host_ip:$qbittorrent_port"
-  printf '  %-22s %s\n' "Jellyfin:"     "http://$host_ip:$jellyfin_port"
-  printf '  %-22s %s\n' "Seerr:"        "http://$host_ip:$seerr_port"
-  printf '  %-22s %s\n' "NPM Admin:"    "http://$host_ip:$npm_port"
+  info "Open each link in your browser."
+  info "First-use instructions apply only when you have not set up a login yet."
+  info "Already set up a login? Use your existing account."
+  warn "Passwords are shown below in plain text. Do not share this output or screenshots."
+
+  # Empty entries separate services. Only the presentation changes here.
+  local -a lines=(
+    "Sonarr         http://$host_ip:$sonarr_port"
+    "  First use: create your username and password in the web interface."
+    ""
+    "Radarr         http://$host_ip:$radarr_port"
+    "  First use: create your username and password in the web interface."
+    ""
+    "Prowlarr       http://$host_ip:$prowlarr_port"
+    "  First use: create your username and password in the web interface."
+    ""
+    "Bazarr         http://$host_ip:$bazarr_port"
+    "  First use: enable authentication and set your username and password."
+    "  Location: Settings > General > Security."
+    ""
+    "qBittorrent    http://$host_ip:$qbittorrent_port"
+    "  Username: $qbittorrent_username | Password: $qbittorrent_password"
+    ""
+    "Jellyfin       http://$host_ip:$jellyfin_port"
+    "  Username: $jellyfin_username | Password: $jellyfin_password"
+    ""
+    "Seerr          http://$host_ip:$seerr_port"
+    "  Username: $jellyfin_username | Password: $jellyfin_password"
+    "  Choose Jellyfin sign-in."
+    "  Use the same administrator account as Jellyfin."
+    ""
+    "NPM Admin      http://$host_ip:$npm_port"
+    "  First use: create your administrator account in the web setup"
+    "  (email + password)."
+  )
+
+  local width=72
+  local line
+  local border
+
+  # Expand for longer credentials rather than truncating the displayed value.
+  for line in "${lines[@]}"; do
+    if (( ${#line} > width )); then
+      width=${#line}
+    fi
+  done
+
+  printf -v border '%*s' "$((width + 2))" ''
+  border="${border// /─}"
+
+  printf '\n┌%s┐\n' "$border"
+
+  for line in "${lines[@]}"; do
+    if [[ -z "$line" ]]; then
+      printf '├%s┤\n' "$border"
+    else
+      printf '│ %s%*s │\n' "$line" "$((width - ${#line}))" ''
+    fi
+  done
+
+  printf '└%s┘\n' "$border"
 
   printf '\n'
   info "Use the addresses above from another device on the same network."
   info "On this machine, you can also replace $host_ip with localhost."
+  info "Displayed credentials are read from .env; passwords changed only in an app may differ."
 }
+
+
 
 # ------------------------------------------------------------------------------
 # Application-level Quick Configuration
