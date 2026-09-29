@@ -340,34 +340,15 @@ get_jellyfin_settings() {
 
 
 sync_jellyfin_libraries() {
-    local settings
-    local enabled_ids
     local endpoint
     local response
 
-    settings="$(get_jellyfin_settings)"
-
-    enabled_ids="$(
-        printf '%s' "$settings" |
-            jq -r '
-                [
-                    .libraries[]?
-                    | select(.enabled == true)
-                    | .id
-                ]
-                | join(",")
-            '
-    )"
-
-    endpoint="/api/v1/settings/jellyfin/library?sync=true"
-
-    if [[ -n "$enabled_ids" ]]; then
-        endpoint+="&enable=$(urlencode "$enabled_ids")"
-    fi
+    # Seerr 3.5 uses a separate sync endpoint and preserves enabled libraries.
+    endpoint="/api/v1/settings/jellyfin/library/sync"
 
     response="$(
         seerr_request \
-            GET \
+            POST \
             "$endpoint" \
             "" \
             true
@@ -391,10 +372,8 @@ configure_jellyfin_libraries() {
     printf '============================================================\n'
 
     local libraries
-    local current_enabled
     local target_ids
-    local desired_ids
-    local desired_csv
+    local library_id
     local missing
     local response
     local endpoint
@@ -418,17 +397,8 @@ configure_jellyfin_libraries() {
         fatal "Required Jellyfin libraries were not found in Seerr: $missing"
     fi
 
-    current_enabled="$(
-        printf '%s' "$libraries" |
-            jq -c '
-                [
-                    .[]?
-                    | select(.enabled == true)
-                    | .id
-                ]
-            '
-    )"
-
+    # Enable only the required libraries that are not already enabled.
+    # The per-library API leaves all other library settings unchanged.
     target_ids="$(
         printf '%s' "$libraries" |
             jq -c '
@@ -441,45 +411,35 @@ configure_jellyfin_libraries() {
                         or
                         .name == "Anime"
                     )
+                    | select(.enabled != true)
                     | .id
                 ]
             '
     )"
 
-    desired_ids="$(
-        jq -cn \
-            --argjson current "$current_enabled" \
-            --argjson targets "$target_ids" '
-                ($current + $targets)
-                | unique
-            '
-    )"
+    while IFS= read -r library_id; do
 
-    desired_csv="$(
-        printf '%s' "$desired_ids" |
-            jq -r 'join(",")'
-    )"
+        endpoint="/api/v1/settings/jellyfin/library/$(urlencode "$library_id")"
 
-    [[ -n "$desired_csv" ]] ||
-        fatal "No Jellyfin libraries were selected for Seerr."
+        response="$(
+            seerr_request \
+                PUT \
+                "$endpoint" \
+                '{"enabled": true}' \
+                true
+        )"
 
-    endpoint="/api/v1/settings/jellyfin/library"
-    endpoint+="?enable=$(urlencode "$desired_csv")"
+        split_response "$response"
 
-    response="$(
-        seerr_request \
-            GET \
-            "$endpoint" \
-            "" \
-            true
-    )"
+        require_success \
+            "$HTTP_STATUS" \
+            "Enabling Jellyfin library '$library_id' in Seerr" \
+            "$HTTP_BODY"
 
-    split_response "$response"
-
-    require_success \
-        "$HTTP_STATUS" \
-        "Enabling Jellyfin libraries in Seerr" \
-        "$HTTP_BODY"
+    done < <(
+        printf '%s' "$target_ids" |
+            jq -r '.[]'
+    )
 
     info "Movies library enabled."
     info "TV Shows library enabled."
